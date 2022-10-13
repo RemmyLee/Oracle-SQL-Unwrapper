@@ -65,13 +65,13 @@
                 {{ unwrapped_sql|safe }}
             </div>
             <br><br>
-            <a href="http://10.100.8.56:3117/"">Unwrap another SQL Query</a>
+            <a href="http://127.0.0.1:3117/"">Unwrap another SQL Query</a>
             {% else %}
             Wrapped SQL:<br><br>
-            <form action="http://10.100.8.56:3117/unwrap" method="post">
+            <form action="http://127.0.0.1:3117/unwrap" method="post">
             <textarea id="wrapped" name="wrapped" rows="60" cols="200" class="txtar"></textarea>
             <br><br>
-            <input type="submit" value="Submit" style="textalign: right;">
+            <input type="submit" value="Submit">
         </form>
             {% endif %}
                 
