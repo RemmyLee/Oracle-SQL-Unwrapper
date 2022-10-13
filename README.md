@@ -1,4 +1,4 @@
-# Oracle 11g+ PL/SQL Unwrapper in Python/Flask
+# Oracle 11g-20c+ PL/SQL Unwrapper in Python/Flask
 
 
 
