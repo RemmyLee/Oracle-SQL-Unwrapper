@@ -7,7 +7,7 @@
         form { margin: 0 0; padding: 0 0; }
         li { display: list-item }
         head { display: none }
-        table { display: table; padding: 0 0; margin: 0 0; border: none }
+        table { display: table; padding: 0 0; margin: 0 0; border: none;  }
         tr { display: table-row }
         thead { display: table-header-group }
         tbody { display: table-row-group }
@@ -42,14 +42,15 @@
         u, ins { text-decoration: underline }
         center { text-align: center }
         a[href] { text-decoration: underline }
-        .content { margin: 10px 25px 10px 25px; width: 60em }
+        .content { margin: 10px 25px 10px 25px;}
         .copyright { font-size: 0.7em; color:#999999; margin-top: 10px }
         .mt { margin-top: 10px }
         .area { background-color: #EFF0E6; padding: 0.6em 1em; border: #BFC0B6 solid 1px; }
         .errorArea { background-color: #F5F6CE; padding: 0.6em 1em; border: #E6DF73 solid 1px; }
         .ln { color: #666666 }
         .horSpace { margin-left: 2em; }
-        .codebox { background-color: #222932; padding: 0.6em 1em; border: #334359 solid 1px; font-family: 'Courier New', monospace; }
+        .codebox { background-color: #222932; padding: 0.6em 1em; border: #334359 solid 1px; font-family: 'Courier New', monospace; display: inline-block;}
+        .howto { background-color: #222932; padding: 0.6em 1em; border: #334359 solid 1px; font-family: 'Courier New', monospace; width: 905px; }
         .txtar { background-color: #222932; padding: 0.6em 1em; border: #334359 solid 1px; font-family: 'Courier New', monospace; }
         a:link { color: #FFFFFF; text-decoration: none; }
         a:visited { color: #FFFFFF; text-decoration: none; }
@@ -65,14 +66,32 @@
                 {{ unwrapped_sql|safe }}
             </div>
             <br><br>
-            <a href="http://127.0.0.1:3117/"">Unwrap another SQL Query</a>
+            <a href="http://127.0.0.1:3117/sql">Unwrap another SQL Query</a>
             {% else %}
             Wrapped SQL:<br><br>
-            <form action="http://127.0.0.1:3117/unwrap" method="post">
-            <textarea id="wrapped" name="wrapped" rows="60" cols="200" class="txtar"></textarea>
-            <br><br>
-            <input type="submit" value="Submit">
-        </form>
+            <table border="0" cellpadding="0" cellspacing="0">
+                <tr>
+                    <td>
+                        <form action="http://127.0.0.1:3117/unwrap" method="post">
+                            <textarea id="wrapped" name="wrapped" rows="30" cols="100" class="txtar"></textarea>
+                            <br><br>
+                            <input type="submit" value="Submit">
+                        </form>
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <br><br>
+                        <div class="howto">
+                            <b>How to use:</b><br>
+                            <ol>
+                                <li>Copy the wrapped SQL query from the application</li>
+                                <li>Paste it into the text box above</li>
+                                <li>Click "Submit"</li>
+                            </ol>
+                        </div>
+                    </td>
+            
             {% endif %}
                 
             
