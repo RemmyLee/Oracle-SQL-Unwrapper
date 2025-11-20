@@ -5,7 +5,7 @@ Handles dashboard CRUD, sharing, public access, and management
 
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from backend.models import Dashboard, User, AuditLog, DashboardShare, Role, DashboardComponent, DashboardDataSource, OracleConnection, DashboardVersion
+from backend.models import Dashboard, User, AuditLog, DashboardShare, Role, DashboardComponent, DashboardDataSource, OracleConnection, DashboardVersion, DashboardTemplate
 from backend.services import DashboardService, SimpleOracleConnector
 from backend.extensions import db
 import logging
@@ -3693,5 +3693,719 @@ def compare_dashboard_versions(dashboard_id):
         return jsonify({
             'success': False,
             'error': 'Failed to compare versions',
+            'message': str(e)
+        }), 500
+
+
+# ==========================================
+# Dashboard Templates
+# ==========================================
+
+@dashboards_bp.route('/templates', methods=['GET'])
+def list_dashboard_templates():
+    """
+    List available dashboard templates
+
+    GET /api/templates
+
+    Query Parameters:
+    - category: Filter by category
+    - tags: Filter by tags (comma-separated)
+    - is_featured: Filter featured templates (true/false)
+    - search: Search in title/description
+    - page: Page number (default: 1)
+    - per_page: Items per page (default: 20)
+    - sort_by: Sort field (default: usage_count)
+    - sort_order: Sort order (asc/desc, default: desc)
+
+    Response:
+    {
+        "success": true,
+        "templates": [...],
+        "pagination": {...}
+    }
+    """
+    try:
+        # Get query parameters
+        category = request.args.get('category')
+        tags_str = request.args.get('tags')
+        tags = tags_str.split(',') if tags_str else None
+        is_featured_str = request.args.get('is_featured')
+        is_featured = is_featured_str.lower() == 'true' if is_featured_str else None
+        search = request.args.get('search')
+        page = request.args.get('page', 1, type=int)
+        per_page = min(request.args.get('per_page', 20, type=int), 100)
+        sort_by = request.args.get('sort_by', 'usage_count')
+        sort_order = request.args.get('sort_order', 'desc')
+
+        # Build query
+        query = DashboardTemplate.query
+
+        # Apply filters
+        if category:
+            query = query.filter_by(category=category)
+
+        if tags:
+            # Filter templates that have any of the specified tags
+            for tag in tags:
+                query = query.filter(DashboardTemplate.tags.contains([tag]))
+
+        if is_featured is not None:
+            query = query.filter_by(is_featured=is_featured)
+
+        if search:
+            search_pattern = f'%{search}%'
+            query = query.filter(
+                db.or_(
+                    DashboardTemplate.title.ilike(search_pattern),
+                    DashboardTemplate.description.ilike(search_pattern)
+                )
+            )
+
+        # Apply sorting
+        if sort_by == 'usage_count':
+            order_col = DashboardTemplate.usage_count
+        elif sort_by == 'created_at':
+            order_col = DashboardTemplate.created_at
+        elif sort_by == 'title':
+            order_col = DashboardTemplate.title
+        else:
+            order_col = DashboardTemplate.usage_count
+
+        if sort_order == 'asc':
+            query = query.order_by(order_col.asc())
+        else:
+            query = query.order_by(order_col.desc())
+
+        # Paginate
+        pagination_obj = query.paginate(page=page, per_page=per_page, error_out=False)
+
+        pagination = {
+            'page': page,
+            'per_page': per_page,
+            'total': pagination_obj.total,
+            'pages': pagination_obj.pages,
+            'has_next': pagination_obj.has_next,
+            'has_prev': pagination_obj.has_prev
+        }
+
+        return jsonify({
+            'success': True,
+            'templates': [t.to_dict(include_creator=True) for t in pagination_obj.items],
+            'pagination': pagination
+        }), 200
+
+    except Exception as e:
+        logger.error(f"List dashboard templates error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to list templates',
+            'message': str(e)
+        }), 500
+
+
+@dashboards_bp.route('/templates/<int:template_id>', methods=['GET'])
+def get_dashboard_template(template_id):
+    """
+    Get a specific template
+
+    GET /api/templates/<template_id>
+
+    Response:
+    {
+        "success": true,
+        "template": {...}
+    }
+    """
+    try:
+        template = DashboardTemplate.query.get(template_id)
+
+        if not template:
+            return jsonify({
+                'success': False,
+                'error': 'Template not found'
+            }), 404
+
+        return jsonify({
+            'success': True,
+            'template': template.to_dict(include_creator=True, include_config=True)
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Get dashboard template error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to get template',
+            'message': str(e)
+        }), 500
+
+
+@dashboards_bp.route('/templates', methods=['POST'])
+@jwt_required()
+def create_dashboard_template():
+    """
+    Create a new template
+
+    POST /api/templates
+    Headers: Authorization: Bearer <access_token>
+
+    Request Body:
+    {
+        "title": "Sales Dashboard Template",
+        "description": "Template for sales analytics",
+        "category": "Analytics",
+        "tags": ["sales", "analytics"],
+        "template_config": {...},  # Dashboard configuration
+        "components_config": [...],  # Components configuration
+        "preview_image_url": "https://...",  # optional
+        "is_featured": false  # optional, admin only
+    }
+
+    Response:
+    {
+        "success": true,
+        "message": "Template created successfully",
+        "template": {...}
+    }
+    """
+    try:
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+
+        if not user:
+            return jsonify({
+                'success': False,
+                'error': 'User not found'
+            }), 404
+
+        data = request.get_json()
+
+        # Required fields
+        title = data.get('title')
+        template_config = data.get('template_config')
+        components_config = data.get('components_config')
+
+        if not title:
+            return jsonify({
+                'success': False,
+                'error': 'title is required'
+            }), 400
+
+        if not template_config:
+            return jsonify({
+                'success': False,
+                'error': 'template_config is required'
+            }), 400
+
+        if not components_config:
+            return jsonify({
+                'success': False,
+                'error': 'components_config is required'
+            }), 400
+
+        # Optional fields
+        description = data.get('description')
+        category = data.get('category')
+        tags = data.get('tags')
+        preview_image_url = data.get('preview_image_url')
+        is_featured = data.get('is_featured', False)
+
+        # Only admins can set featured flag
+        if is_featured and not user.is_admin:
+            return jsonify({
+                'success': False,
+                'error': 'Only administrators can create featured templates'
+            }), 403
+
+        # Create template
+        template = DashboardTemplate(
+            title=title,
+            description=description,
+            category=category,
+            tags=tags,
+            template_config=template_config,
+            components_config=components_config,
+            preview_image_url=preview_image_url,
+            is_featured=is_featured,
+            created_by_id=user.id
+        )
+
+        db.session.add(template)
+        db.session.commit()
+
+        # Log action
+        AuditLog.log_action(
+            action='create_dashboard_template',
+            user=user,
+            resource_type='dashboard_template',
+            resource_id=template.id,
+            details={'title': title, 'category': category},
+            ip_address=request.remote_addr
+        )
+
+        return jsonify({
+            'success': True,
+            'message': 'Template created successfully',
+            'template': template.to_dict(include_creator=True)
+        }), 201
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Create dashboard template error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to create template',
+            'message': str(e)
+        }), 500
+
+
+@dashboards_bp.route('/dashboards/<int:dashboard_id>/create-template', methods=['POST'])
+@jwt_required()
+def create_template_from_dashboard(dashboard_id):
+    """
+    Create a template from an existing dashboard
+
+    POST /api/dashboards/<dashboard_id>/create-template
+    Headers: Authorization: Bearer <access_token>
+
+    Request Body:
+    {
+        "title": "My Template",
+        "description": "Template description",
+        "category": "Analytics",
+        "tags": ["sales"],
+        "include_data_sources": false  # optional, default false
+    }
+
+    Response:
+    {
+        "success": true,
+        "message": "Template created from dashboard",
+        "template": {...}
+    }
+    """
+    try:
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+
+        if not user:
+            return jsonify({
+                'success': False,
+                'error': 'User not found'
+            }), 404
+
+        dashboard = Dashboard.query.get(dashboard_id)
+
+        if not dashboard:
+            return jsonify({
+                'success': False,
+                'error': 'Dashboard not found'
+            }), 404
+
+        # Check permission (need to view to create template)
+        if not DashboardService.can_view_dashboard(dashboard, user):
+            return jsonify({
+                'success': False,
+                'error': 'Access denied',
+                'message': 'You do not have permission to view this dashboard'
+            }), 403
+
+        data = request.get_json()
+
+        title = data.get('title')
+        description = data.get('description')
+        category = data.get('category')
+        tags = data.get('tags')
+        include_data_sources = data.get('include_data_sources', False)
+
+        if not title:
+            return jsonify({
+                'success': False,
+                'error': 'title is required'
+            }), 400
+
+        # Create template config from dashboard
+        template_config = {
+            'theme': dashboard.theme,
+            'layout_config': dashboard.layout_config,
+            'refresh_interval': dashboard.refresh_interval,
+            'allow_embedding': dashboard.allow_embedding,
+            'allow_export': dashboard.allow_export,
+            'allow_filters': dashboard.allow_filters
+        }
+
+        # Create components config
+        components_config = []
+        for component in dashboard.components:
+            comp_config = {
+                'component_type': component.component_type,
+                'title': component.title,
+                'description': component.description,
+                'grid_position': component.grid_position,
+                'config': component.config,
+                'refresh_interval': component.refresh_interval,
+                'order_index': component.order_index,
+                'is_visible': component.is_visible
+            }
+
+            # Optionally include data source info
+            if include_data_sources and component.data_source:
+                comp_config['data_source'] = {
+                    'name': component.data_source.name,
+                    'source_type': component.data_source.source_type,
+                    'query_text': component.data_source.query_text if component.data_source.source_type == 'sql_query' else None,
+                    'api_url': component.data_source.api_url if component.data_source.source_type == 'rest_api' else None,
+                    'static_data': component.data_source.static_data if component.data_source.source_type == 'static_data' else None
+                }
+
+            components_config.append(comp_config)
+
+        # Create template
+        template = DashboardTemplate(
+            title=title,
+            description=description or dashboard.description,
+            category=category or dashboard.category,
+            tags=tags or dashboard.tags,
+            template_config=template_config,
+            components_config=components_config,
+            created_by_id=user.id,
+            is_featured=False
+        )
+
+        db.session.add(template)
+        db.session.commit()
+
+        # Log action
+        AuditLog.log_action(
+            action='create_template_from_dashboard',
+            user=user,
+            resource_type='dashboard_template',
+            resource_id=template.id,
+            details={'dashboard_id': dashboard_id, 'title': title},
+            ip_address=request.remote_addr
+        )
+
+        return jsonify({
+            'success': True,
+            'message': 'Template created from dashboard',
+            'template': template.to_dict(include_creator=True)
+        }), 201
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Create template from dashboard error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to create template',
+            'message': str(e)
+        }), 500
+
+
+@dashboards_bp.route('/templates/<int:template_id>/use', methods=['POST'])
+@jwt_required()
+def create_dashboard_from_template(template_id):
+    """
+    Create a new dashboard from a template
+
+    POST /api/templates/<template_id>/use
+    Headers: Authorization: Bearer <access_token>
+
+    Request Body:
+    {
+        "title": "My Dashboard",  # optional, defaults to template title
+        "description": "My dashboard description"  # optional
+    }
+
+    Response:
+    {
+        "success": true,
+        "message": "Dashboard created from template",
+        "dashboard": {...}
+    }
+    """
+    try:
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+
+        if not user:
+            return jsonify({
+                'success': False,
+                'error': 'User not found'
+            }), 404
+
+        template = DashboardTemplate.query.get(template_id)
+
+        if not template:
+            return jsonify({
+                'success': False,
+                'error': 'Template not found'
+            }), 404
+
+        data = request.get_json() or {}
+
+        title = data.get('title', template.title)
+        description = data.get('description', template.description)
+
+        # Create dashboard from template
+        template_config = template.template_config or {}
+
+        dashboard, error = DashboardService.create_dashboard(
+            owner=user,
+            title=title,
+            description=description,
+            category=template.category,
+            tags=template.tags,
+            layout_config=template_config.get('layout_config'),
+            theme=template_config.get('theme', 'default'),
+            refresh_interval=template_config.get('refresh_interval'),
+            allow_embedding=template_config.get('allow_embedding', False),
+            allow_export=template_config.get('allow_export', True),
+            allow_filters=template_config.get('allow_filters', True)
+        )
+
+        if error:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to create dashboard from template',
+                'message': error
+            }), 400
+
+        # Create components from template
+        for comp_config in (template.components_config or []):
+            # Create data source if provided
+            data_source_id = None
+            if comp_config.get('data_source'):
+                ds_config = comp_config['data_source']
+                data_source = DashboardDataSource(
+                    dashboard_id=dashboard.id,
+                    name=ds_config.get('name', 'Data Source'),
+                    source_type=ds_config.get('source_type', 'static_data'),
+                    query_text=ds_config.get('query_text'),
+                    api_url=ds_config.get('api_url'),
+                    static_data=ds_config.get('static_data'),
+                    cache_enabled=True,
+                    cache_duration=300
+                )
+                db.session.add(data_source)
+                db.session.flush()
+                data_source_id = data_source.id
+
+            # Create component
+            component = DashboardComponent(
+                dashboard_id=dashboard.id,
+                component_type=comp_config['component_type'],
+                title=comp_config.get('title'),
+                description=comp_config.get('description'),
+                grid_position=comp_config.get('grid_position'),
+                config=comp_config.get('config'),
+                data_source_id=data_source_id,
+                refresh_interval=comp_config.get('refresh_interval'),
+                order_index=comp_config.get('order_index', 0),
+                is_visible=comp_config.get('is_visible', True)
+            )
+            db.session.add(component)
+
+        # Increment template usage count
+        template.increment_usage()
+
+        db.session.commit()
+
+        # Log action
+        AuditLog.log_action(
+            action='create_dashboard_from_template',
+            user=user,
+            resource_type='dashboard',
+            resource_id=dashboard.id,
+            details={'template_id': template_id, 'template_title': template.title},
+            ip_address=request.remote_addr
+        )
+
+        return jsonify({
+            'success': True,
+            'message': 'Dashboard created from template',
+            'dashboard': dashboard.to_dict()
+        }), 201
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Create dashboard from template error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to create dashboard from template',
+            'message': str(e)
+        }), 500
+
+
+@dashboards_bp.route('/templates/<int:template_id>', methods=['PUT'])
+@jwt_required()
+def update_dashboard_template(template_id):
+    """
+    Update a template
+
+    PUT /api/templates/<template_id>
+    Headers: Authorization: Bearer <access_token>
+
+    Request Body:
+    {
+        "title": "Updated Title",
+        "description": "Updated description",
+        "category": "Updated Category",
+        "tags": ["updated", "tags"],
+        "is_featured": true  # admin only
+    }
+
+    Response:
+    {
+        "success": true,
+        "message": "Template updated successfully",
+        "template": {...}
+    }
+    """
+    try:
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+
+        if not user:
+            return jsonify({
+                'success': False,
+                'error': 'User not found'
+            }), 404
+
+        template = DashboardTemplate.query.get(template_id)
+
+        if not template:
+            return jsonify({
+                'success': False,
+                'error': 'Template not found'
+            }), 404
+
+        # Check permission (only creator or admin can update)
+        if template.created_by_id != user.id and not user.is_admin:
+            return jsonify({
+                'success': False,
+                'error': 'Access denied',
+                'message': 'You do not have permission to update this template'
+            }), 403
+
+        data = request.get_json()
+
+        # Update fields
+        if 'title' in data:
+            template.title = data['title']
+        if 'description' in data:
+            template.description = data['description']
+        if 'category' in data:
+            template.category = data['category']
+        if 'tags' in data:
+            template.tags = data['tags']
+        if 'template_config' in data:
+            template.template_config = data['template_config']
+        if 'components_config' in data:
+            template.components_config = data['components_config']
+        if 'preview_image_url' in data:
+            template.preview_image_url = data['preview_image_url']
+
+        # Only admins can change featured status
+        if 'is_featured' in data:
+            if not user.is_admin:
+                return jsonify({
+                    'success': False,
+                    'error': 'Only administrators can change featured status'
+                }), 403
+            template.is_featured = data['is_featured']
+
+        template.updated_at = datetime.utcnow()
+        db.session.commit()
+
+        # Log action
+        AuditLog.log_action(
+            action='update_dashboard_template',
+            user=user,
+            resource_type='dashboard_template',
+            resource_id=template.id,
+            ip_address=request.remote_addr
+        )
+
+        return jsonify({
+            'success': True,
+            'message': 'Template updated successfully',
+            'template': template.to_dict(include_creator=True)
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Update dashboard template error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to update template',
+            'message': str(e)
+        }), 500
+
+
+@dashboards_bp.route('/templates/<int:template_id>', methods=['DELETE'])
+@jwt_required()
+def delete_dashboard_template(template_id):
+    """
+    Delete a template
+
+    DELETE /api/templates/<template_id>
+    Headers: Authorization: Bearer <access_token>
+
+    Response:
+    {
+        "success": true,
+        "message": "Template deleted successfully"
+    }
+    """
+    try:
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+
+        if not user:
+            return jsonify({
+                'success': False,
+                'error': 'User not found'
+            }), 404
+
+        template = DashboardTemplate.query.get(template_id)
+
+        if not template:
+            return jsonify({
+                'success': False,
+                'error': 'Template not found'
+            }), 404
+
+        # Check permission (only creator or admin can delete)
+        if template.created_by_id != user.id and not user.is_admin:
+            return jsonify({
+                'success': False,
+                'error': 'Access denied',
+                'message': 'You do not have permission to delete this template'
+            }), 403
+
+        # Log action before deletion
+        AuditLog.log_action(
+            action='delete_dashboard_template',
+            user=user,
+            resource_type='dashboard_template',
+            resource_id=template.id,
+            details={'title': template.title},
+            ip_address=request.remote_addr
+        )
+
+        db.session.delete(template)
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': 'Template deleted successfully'
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Delete dashboard template error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to delete template',
             'message': str(e)
         }), 500
