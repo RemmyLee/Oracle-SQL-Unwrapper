@@ -60,9 +60,37 @@ openpyxl==3.1.2
 # Flask-Mail==0.9.1
 
 # ============================================
-# Phase 4: Enterprise Features (Future)
+# Phase 4: User Management & Authentication
 # ============================================
-# Uncomment when implementing Phase 4
+
+# JWT Authentication
+Flask-JWT-Extended==4.5.2
+PyJWT==2.8.0
+
+# Email Support
+Flask-Mail==0.9.1
+
+# Caching
+Flask-Caching==2.1.0
+
+# User Agent Parsing
+user-agents==2.2.0
+
+# Password Strength Validation
+zxcvbn==4.4.28
+
+# ============================================
+# Phase 5+: Dashboard System (Future)
+# ============================================
+# Uncomment when implementing Phase 5+
+
+# Task Queue & Caching
+# celery==5.3.4
+# redis==5.0.0
+
+# PDF Generation
+# WeasyPrint==60.1
+# Pillow==10.1.0
 
 # Production Server
 # gunicorn==21.2.0
