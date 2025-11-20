@@ -37,17 +37,13 @@ black==23.9.1
 colorlog==6.7.0
 
 # ============================================
-# Phase 2: Database Connectivity (Future)
+# Phase 2: Database Connectivity
 # ============================================
-# Uncomment when implementing Phase 2
 
 # Oracle Database Connectivity
-# cx-Oracle==8.3.0
-# or
+cx-Oracle==8.3.0
+# Alternative pure-python driver (uncomment if preferred):
 # python-oracledb==1.4.0
-
-# Connection pooling optimization
-# sqlalchemy-pool==0.0.1
 
 # ============================================
 # Phase 3: Advanced Features (Future)

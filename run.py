@@ -33,11 +33,30 @@ if __name__ == '__main__':
 ╚══════════════════════════════════════════════════════════════╝
 
 Available Endpoints:
-  - GET  /                    Main application page
-  - POST /api/unwrap          Unwrap Oracle PL/SQL code
-  - POST /api/unwrap/batch    Batch unwrap multiple files
-  - POST /api/unwrap/validate Validate wrapped content
-  - GET  /api/health          Health check
+
+  Unwrapper:
+  - POST /api/unwrap                 Unwrap Oracle PL/SQL code
+  - POST /api/unwrap/batch           Batch unwrap multiple files
+  - POST /api/unwrap/validate        Validate wrapped content
+  - POST /api/unwrap-from-db         Unwrap directly from database
+
+  Connections:
+  - GET    /api/connections          List all connections
+  - POST   /api/connections          Create new connection
+  - GET    /api/connections/<id>     Get connection details
+  - PUT    /api/connections/<id>     Update connection
+  - DELETE /api/connections/<id>     Delete connection
+  - POST   /api/connections/<id>/test Test connection
+
+  Queries:
+  - POST /api/query/execute          Execute SQL query
+  - POST /api/query/execute-statement Execute DML/DDL statement
+  - GET  /api/query/history          Get query history
+  - GET  /api/schema/<id>/<schema>/objects Get schema objects
+  - GET  /api/source/<id>/<schema>/<type>/<name> Get source code
+
+  Health:
+  - GET  /api/health                 Health check
 
 Press CTRL+C to quit
 """)

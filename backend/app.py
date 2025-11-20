@@ -52,9 +52,13 @@ def register_blueprints(app):
     """Register Flask blueprints (API routes)"""
 
     from backend.api.unwrap import unwrap_bp
+    from backend.api.connections import connections_bp
+    from backend.api.queries import queries_bp
 
     # Register API blueprints
     app.register_blueprint(unwrap_bp, url_prefix='/api')
+    app.register_blueprint(connections_bp, url_prefix='/api')
+    app.register_blueprint(queries_bp, url_prefix='/api')
 
     # Root route for frontend
     @app.route('/')
