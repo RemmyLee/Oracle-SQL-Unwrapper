@@ -5,11 +5,12 @@ Handles dashboard CRUD, sharing, public access, and management
 
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from backend.models import Dashboard, User, AuditLog, DashboardShare, Role, DashboardComponent, DashboardDataSource
-from backend.services import DashboardService
+from backend.models import Dashboard, User, AuditLog, DashboardShare, Role, DashboardComponent, DashboardDataSource, OracleConnection
+from backend.services import DashboardService, SimpleOracleConnector
 from backend.extensions import db
 import logging
 from datetime import datetime, timedelta
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -2114,5 +2115,938 @@ def duplicate_dashboard_component(dashboard_id, component_id):
         return jsonify({
             'success': False,
             'error': 'Failed to duplicate component',
+            'message': str(e)
+        }), 500
+
+
+# ==========================================
+# Dashboard Data Source Integration
+# ==========================================
+
+@dashboards_bp.route('/dashboards/<int:dashboard_id>/data-sources', methods=['GET'])
+def list_dashboard_data_sources(dashboard_id):
+    """
+    List all data sources for a dashboard
+
+    GET /api/dashboards/<dashboard_id>/data-sources
+
+    Response:
+    {
+        "success": true,
+        "data_sources": [...]
+    }
+    """
+    try:
+        user = get_current_user()
+
+        dashboard = Dashboard.query.get(dashboard_id)
+
+        if not dashboard:
+            return jsonify({
+                'success': False,
+                'error': 'Dashboard not found'
+            }), 404
+
+        # Check access
+        if not DashboardService.can_view_dashboard(dashboard, user):
+            return jsonify({
+                'success': False,
+                'error': 'Access denied',
+                'message': 'You do not have permission to view this dashboard'
+            }), 403
+
+        # Get all data sources
+        data_sources = DashboardDataSource.query.filter_by(
+            dashboard_id=dashboard_id
+        ).all()
+
+        return jsonify({
+            'success': True,
+            'data_sources': [ds.to_dict(include_connection=True) for ds in data_sources]
+        }), 200
+
+    except Exception as e:
+        logger.error(f"List dashboard data sources error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to list data sources',
+            'message': str(e)
+        }), 500
+
+
+@dashboards_bp.route('/dashboards/<int:dashboard_id>/data-sources', methods=['POST'])
+@jwt_required()
+def create_dashboard_data_source(dashboard_id):
+    """
+    Create a new data source for dashboard
+
+    POST /api/dashboards/<dashboard_id>/data-sources
+    Headers: Authorization: Bearer <access_token>
+
+    Request Body:
+    {
+        "name": "Sales Data",
+        "source_type": "sql_query",  # sql_query, saved_query, rest_api, static_data, csv_upload
+        "connection_id": 123,  # Required for sql_query
+        "query_text": "SELECT * FROM sales",  # Required for sql_query
+        "saved_query_id": 456,  # Required for saved_query
+        "api_url": "https://api.example.com/data",  # Required for rest_api
+        "api_method": "GET",  # For rest_api
+        "api_headers": {...},  # For rest_api
+        "static_data": {...},  # Required for static_data
+        "cache_enabled": true,
+        "cache_duration": 300,  # seconds
+        "refresh_on_load": true
+    }
+
+    Response:
+    {
+        "success": true,
+        "message": "Data source created successfully",
+        "data_source": {...}
+    }
+    """
+    try:
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+
+        if not user:
+            return jsonify({
+                'success': False,
+                'error': 'User not found'
+            }), 404
+
+        dashboard = Dashboard.query.get(dashboard_id)
+
+        if not dashboard:
+            return jsonify({
+                'success': False,
+                'error': 'Dashboard not found'
+            }), 404
+
+        # Check permission
+        if not DashboardService.can_edit_dashboard(dashboard, user):
+            return jsonify({
+                'success': False,
+                'error': 'Access denied',
+                'message': 'You do not have permission to edit this dashboard'
+            }), 403
+
+        data = request.get_json()
+
+        # Required fields
+        name = data.get('name')
+        source_type = data.get('source_type')
+
+        if not name:
+            return jsonify({
+                'success': False,
+                'error': 'name is required'
+            }), 400
+
+        if not source_type:
+            return jsonify({
+                'success': False,
+                'error': 'source_type is required'
+            }), 400
+
+        # Validate source type
+        valid_types = ['sql_query', 'saved_query', 'rest_api', 'static_data', 'csv_upload']
+        if source_type not in valid_types:
+            return jsonify({
+                'success': False,
+                'error': f'Invalid source_type. Must be one of: {", ".join(valid_types)}'
+            }), 400
+
+        # Type-specific validation
+        connection_id = data.get('connection_id')
+        query_text = data.get('query_text')
+        saved_query_id = data.get('saved_query_id')
+        api_url = data.get('api_url')
+        api_method = data.get('api_method', 'GET')
+        api_headers = data.get('api_headers')
+        api_body = data.get('api_body')
+        static_data = data.get('static_data')
+        csv_data = data.get('csv_data')
+
+        if source_type == 'sql_query':
+            if not connection_id:
+                return jsonify({
+                    'success': False,
+                    'error': 'connection_id is required for sql_query type'
+                }), 400
+            if not query_text:
+                return jsonify({
+                    'success': False,
+                    'error': 'query_text is required for sql_query type'
+                }), 400
+
+            # Validate connection exists and user has access
+            connection = OracleConnection.query.get(connection_id)
+            if not connection:
+                return jsonify({
+                    'success': False,
+                    'error': 'Connection not found'
+                }), 404
+
+            # Check connection access (owner or shared)
+            if connection.owner_id != user.id:
+                # TODO: Add share checking logic if connections can be shared
+                return jsonify({
+                    'success': False,
+                    'error': 'You do not have access to this connection'
+                }), 403
+
+        elif source_type == 'saved_query':
+            if not saved_query_id:
+                return jsonify({
+                    'success': False,
+                    'error': 'saved_query_id is required for saved_query type'
+                }), 400
+            # TODO: Validate saved query exists and user has access
+
+        elif source_type == 'rest_api':
+            if not api_url:
+                return jsonify({
+                    'success': False,
+                    'error': 'api_url is required for rest_api type'
+                }), 400
+
+        elif source_type == 'static_data':
+            if not static_data:
+                return jsonify({
+                    'success': False,
+                    'error': 'static_data is required for static_data type'
+                }), 400
+
+        elif source_type == 'csv_upload':
+            if not csv_data:
+                return jsonify({
+                    'success': False,
+                    'error': 'csv_data is required for csv_upload type'
+                }), 400
+
+        # Optional fields
+        description = data.get('description')
+        cache_enabled = data.get('cache_enabled', True)
+        cache_duration = data.get('cache_duration', 300)
+        refresh_on_load = data.get('refresh_on_load', True)
+
+        # Create data source
+        data_source = DashboardDataSource(
+            dashboard_id=dashboard_id,
+            name=name,
+            description=description,
+            source_type=source_type,
+            connection_id=connection_id,
+            query_text=query_text,
+            saved_query_id=saved_query_id,
+            api_url=api_url,
+            api_method=api_method,
+            api_headers=api_headers,
+            api_body=api_body,
+            static_data=static_data,
+            csv_data=csv_data,
+            cache_enabled=cache_enabled,
+            cache_duration=cache_duration,
+            refresh_on_load=refresh_on_load
+        )
+
+        db.session.add(data_source)
+        db.session.commit()
+
+        # Log action
+        AuditLog.log_action(
+            action='create_dashboard_data_source',
+            user=user,
+            resource_type='dashboard_data_source',
+            resource_id=data_source.id,
+            details={'dashboard_id': dashboard_id, 'source_type': source_type},
+            ip_address=request.remote_addr
+        )
+
+        return jsonify({
+            'success': True,
+            'message': 'Data source created successfully',
+            'data_source': data_source.to_dict(include_connection=True)
+        }), 201
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Create dashboard data source error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to create data source',
+            'message': str(e)
+        }), 500
+
+
+@dashboards_bp.route('/dashboards/<int:dashboard_id>/data-sources/<int:source_id>', methods=['GET'])
+def get_dashboard_data_source(dashboard_id, source_id):
+    """
+    Get a specific data source
+
+    GET /api/dashboards/<dashboard_id>/data-sources/<source_id>
+
+    Response:
+    {
+        "success": true,
+        "data_source": {...}
+    }
+    """
+    try:
+        user = get_current_user()
+
+        dashboard = Dashboard.query.get(dashboard_id)
+
+        if not dashboard:
+            return jsonify({
+                'success': False,
+                'error': 'Dashboard not found'
+            }), 404
+
+        # Check access
+        if not DashboardService.can_view_dashboard(dashboard, user):
+            return jsonify({
+                'success': False,
+                'error': 'Access denied'
+            }), 403
+
+        data_source = DashboardDataSource.query.filter_by(
+            id=source_id,
+            dashboard_id=dashboard_id
+        ).first()
+
+        if not data_source:
+            return jsonify({
+                'success': False,
+                'error': 'Data source not found'
+            }), 404
+
+        return jsonify({
+            'success': True,
+            'data_source': data_source.to_dict(include_connection=True)
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Get dashboard data source error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to get data source',
+            'message': str(e)
+        }), 500
+
+
+@dashboards_bp.route('/dashboards/<int:dashboard_id>/data-sources/<int:source_id>', methods=['PUT'])
+@jwt_required()
+def update_dashboard_data_source(dashboard_id, source_id):
+    """
+    Update data source
+
+    PUT /api/dashboards/<dashboard_id>/data-sources/<source_id>
+    Headers: Authorization: Bearer <access_token>
+
+    Request Body:
+    {
+        "name": "Updated Name",
+        "query_text": "SELECT * FROM updated_table",
+        "cache_duration": 600
+    }
+
+    Response:
+    {
+        "success": true,
+        "message": "Data source updated successfully",
+        "data_source": {...}
+    }
+    """
+    try:
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+
+        if not user:
+            return jsonify({
+                'success': False,
+                'error': 'User not found'
+            }), 404
+
+        dashboard = Dashboard.query.get(dashboard_id)
+
+        if not dashboard:
+            return jsonify({
+                'success': False,
+                'error': 'Dashboard not found'
+            }), 404
+
+        data_source = DashboardDataSource.query.filter_by(
+            id=source_id,
+            dashboard_id=dashboard_id
+        ).first()
+
+        if not data_source:
+            return jsonify({
+                'success': False,
+                'error': 'Data source not found'
+            }), 404
+
+        # Check permission
+        if not DashboardService.can_edit_dashboard(dashboard, user):
+            return jsonify({
+                'success': False,
+                'error': 'Access denied',
+                'message': 'You do not have permission to edit this dashboard'
+            }), 403
+
+        data = request.get_json()
+
+        # Update fields
+        if 'name' in data:
+            data_source.name = data['name']
+        if 'description' in data:
+            data_source.description = data['description']
+        if 'query_text' in data:
+            data_source.query_text = data['query_text']
+            # Clear cached data when query changes
+            data_source.cached_data = None
+            data_source.cached_at = None
+        if 'api_url' in data:
+            data_source.api_url = data['api_url']
+            data_source.cached_data = None
+            data_source.cached_at = None
+        if 'api_method' in data:
+            data_source.api_method = data['api_method']
+        if 'api_headers' in data:
+            data_source.api_headers = data['api_headers']
+        if 'api_body' in data:
+            data_source.api_body = data['api_body']
+        if 'static_data' in data:
+            data_source.static_data = data['static_data']
+            data_source.cached_data = None
+        if 'cache_enabled' in data:
+            data_source.cache_enabled = data['cache_enabled']
+        if 'cache_duration' in data:
+            data_source.cache_duration = data['cache_duration']
+        if 'refresh_on_load' in data:
+            data_source.refresh_on_load = data['refresh_on_load']
+
+        data_source.updated_at = datetime.utcnow()
+        db.session.commit()
+
+        # Log action
+        AuditLog.log_action(
+            action='update_dashboard_data_source',
+            user=user,
+            resource_type='dashboard_data_source',
+            resource_id=data_source.id,
+            details={'dashboard_id': dashboard_id},
+            ip_address=request.remote_addr
+        )
+
+        return jsonify({
+            'success': True,
+            'message': 'Data source updated successfully',
+            'data_source': data_source.to_dict(include_connection=True)
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Update dashboard data source error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to update data source',
+            'message': str(e)
+        }), 500
+
+
+@dashboards_bp.route('/dashboards/<int:dashboard_id>/data-sources/<int:source_id>', methods=['DELETE'])
+@jwt_required()
+def delete_dashboard_data_source(dashboard_id, source_id):
+    """
+    Delete data source
+
+    DELETE /api/dashboards/<dashboard_id>/data-sources/<source_id>
+    Headers: Authorization: Bearer <access_token>
+
+    Response:
+    {
+        "success": true,
+        "message": "Data source deleted successfully"
+    }
+    """
+    try:
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+
+        if not user:
+            return jsonify({
+                'success': False,
+                'error': 'User not found'
+            }), 404
+
+        dashboard = Dashboard.query.get(dashboard_id)
+
+        if not dashboard:
+            return jsonify({
+                'success': False,
+                'error': 'Dashboard not found'
+            }), 404
+
+        data_source = DashboardDataSource.query.filter_by(
+            id=source_id,
+            dashboard_id=dashboard_id
+        ).first()
+
+        if not data_source:
+            return jsonify({
+                'success': False,
+                'error': 'Data source not found'
+            }), 404
+
+        # Check permission
+        if not DashboardService.can_edit_dashboard(dashboard, user):
+            return jsonify({
+                'success': False,
+                'error': 'Access denied',
+                'message': 'You do not have permission to edit this dashboard'
+            }), 403
+
+        # Check if data source is in use
+        components_using = DashboardComponent.query.filter_by(data_source_id=source_id).count()
+        if components_using > 0:
+            return jsonify({
+                'success': False,
+                'error': 'Cannot delete data source',
+                'message': f'This data source is currently used by {components_using} component(s). Remove it from components first.'
+            }), 400
+
+        # Log action before deletion
+        AuditLog.log_action(
+            action='delete_dashboard_data_source',
+            user=user,
+            resource_type='dashboard_data_source',
+            resource_id=data_source.id,
+            details={'dashboard_id': dashboard_id, 'source_type': data_source.source_type},
+            ip_address=request.remote_addr
+        )
+
+        db.session.delete(data_source)
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': 'Data source deleted successfully'
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Delete dashboard data source error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to delete data source',
+            'message': str(e)
+        }), 500
+
+
+@dashboards_bp.route('/dashboards/<int:dashboard_id>/data-sources/<int:source_id>/test', methods=['POST'])
+@jwt_required()
+def test_dashboard_data_source(dashboard_id, source_id):
+    """
+    Test data source connection/query
+
+    POST /api/dashboards/<dashboard_id>/data-sources/<source_id>/test
+    Headers: Authorization: Bearer <access_token>
+
+    Response:
+    {
+        "success": true,
+        "message": "Data source test successful",
+        "test_results": {
+            "connection_ok": true,
+            "row_count": 100,
+            "columns": ["col1", "col2"],
+            "execution_time": 0.523
+        }
+    }
+    """
+    try:
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+
+        if not user:
+            return jsonify({
+                'success': False,
+                'error': 'User not found'
+            }), 404
+
+        dashboard = Dashboard.query.get(dashboard_id)
+
+        if not dashboard:
+            return jsonify({
+                'success': False,
+                'error': 'Dashboard not found'
+            }), 404
+
+        data_source = DashboardDataSource.query.filter_by(
+            id=source_id,
+            dashboard_id=dashboard_id
+        ).first()
+
+        if not data_source:
+            return jsonify({
+                'success': False,
+                'error': 'Data source not found'
+            }), 404
+
+        # Check permission
+        if not DashboardService.can_edit_dashboard(dashboard, user):
+            return jsonify({
+                'success': False,
+                'error': 'Access denied'
+            }), 403
+
+        import time
+        start_time = time.time()
+
+        test_results = {
+            'connection_ok': False,
+            'row_count': 0,
+            'columns': [],
+            'execution_time': 0,
+            'error': None
+        }
+
+        try:
+            if data_source.source_type == 'sql_query':
+                # Test Oracle connection and query
+                connection = OracleConnection.query.get(data_source.connection_id)
+                if not connection:
+                    raise Exception('Connection not found')
+
+                connector = SimpleOracleConnector(
+                    host=connection.host,
+                    port=connection.port,
+                    service_name=connection.service_name,
+                    username=connection.username,
+                    password=connection.get_decrypted_password()
+                )
+
+                # Execute query with ROWNUM limit for testing
+                test_query = f"SELECT * FROM ({data_source.query_text}) WHERE ROWNUM <= 10"
+                results = connector.execute_query(test_query)
+
+                test_results['connection_ok'] = True
+                test_results['row_count'] = len(results)
+                test_results['columns'] = list(results[0].keys()) if results else []
+
+            elif data_source.source_type == 'static_data':
+                # Validate static data structure
+                if data_source.static_data:
+                    if isinstance(data_source.static_data, list):
+                        test_results['connection_ok'] = True
+                        test_results['row_count'] = len(data_source.static_data)
+                        if data_source.static_data:
+                            test_results['columns'] = list(data_source.static_data[0].keys())
+                    else:
+                        raise Exception('static_data must be a list of objects')
+
+            elif data_source.source_type == 'rest_api':
+                # Test REST API
+                import requests
+                response = requests.request(
+                    method=data_source.api_method,
+                    url=data_source.api_url,
+                    headers=data_source.api_headers or {},
+                    json=data_source.api_body if data_source.api_method != 'GET' else None,
+                    timeout=10
+                )
+                response.raise_for_status()
+
+                data = response.json()
+                test_results['connection_ok'] = True
+                test_results['row_count'] = len(data) if isinstance(data, list) else 1
+                if isinstance(data, list) and data:
+                    test_results['columns'] = list(data[0].keys())
+                elif isinstance(data, dict):
+                    test_results['columns'] = list(data.keys())
+
+            else:
+                test_results['error'] = f'Testing not implemented for source_type: {data_source.source_type}'
+
+        except Exception as test_error:
+            test_results['error'] = str(test_error)
+
+        test_results['execution_time'] = round(time.time() - start_time, 3)
+
+        # Log action
+        AuditLog.log_action(
+            action='test_dashboard_data_source',
+            user=user,
+            resource_type='dashboard_data_source',
+            resource_id=data_source.id,
+            details={
+                'dashboard_id': dashboard_id,
+                'success': test_results['connection_ok'],
+                'execution_time': test_results['execution_time']
+            },
+            ip_address=request.remote_addr
+        )
+
+        if test_results['error']:
+            return jsonify({
+                'success': False,
+                'error': 'Data source test failed',
+                'message': test_results['error'],
+                'test_results': test_results
+            }), 400
+
+        return jsonify({
+            'success': True,
+            'message': 'Data source test successful',
+            'test_results': test_results
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Test dashboard data source error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to test data source',
+            'message': str(e)
+        }), 500
+
+
+@dashboards_bp.route('/dashboards/<int:dashboard_id>/data-sources/<int:source_id>/execute', methods=['POST'])
+def execute_dashboard_data_source(dashboard_id, source_id):
+    """
+    Execute data source and fetch data
+
+    POST /api/dashboards/<dashboard_id>/data-sources/<source_id>/execute
+
+    Query Parameters:
+    - force_refresh: Force refresh even if cached (default: false)
+
+    Response:
+    {
+        "success": true,
+        "data": [...],
+        "metadata": {
+            "row_count": 100,
+            "columns": ["col1", "col2"],
+            "cached": false,
+            "execution_time": 0.523,
+            "fetched_at": "2024-01-01T00:00:00Z"
+        }
+    }
+    """
+    try:
+        user = get_current_user()
+
+        dashboard = Dashboard.query.get(dashboard_id)
+
+        if not dashboard:
+            return jsonify({
+                'success': False,
+                'error': 'Dashboard not found'
+            }), 404
+
+        # Check access
+        if not DashboardService.can_view_dashboard(dashboard, user):
+            return jsonify({
+                'success': False,
+                'error': 'Access denied'
+            }), 403
+
+        data_source = DashboardDataSource.query.filter_by(
+            id=source_id,
+            dashboard_id=dashboard_id
+        ).first()
+
+        if not data_source:
+            return jsonify({
+                'success': False,
+                'error': 'Data source not found'
+            }), 404
+
+        force_refresh = request.args.get('force_refresh', 'false').lower() == 'true'
+
+        # Check cache
+        if not force_refresh and data_source.cache_enabled and data_source.cached_data:
+            if data_source.cached_at:
+                cache_age = (datetime.utcnow() - data_source.cached_at).total_seconds()
+                if cache_age < data_source.cache_duration:
+                    # Return cached data
+                    return jsonify({
+                        'success': True,
+                        'data': data_source.cached_data,
+                        'metadata': {
+                            'row_count': len(data_source.cached_data),
+                            'columns': list(data_source.cached_data[0].keys()) if data_source.cached_data else [],
+                            'cached': True,
+                            'cache_age': round(cache_age, 2),
+                            'fetched_at': data_source.cached_at.isoformat()
+                        }
+                    }), 200
+
+        # Execute data source
+        import time
+        start_time = time.time()
+        results = []
+
+        try:
+            if data_source.source_type == 'sql_query':
+                connection = OracleConnection.query.get(data_source.connection_id)
+                if not connection:
+                    raise Exception('Connection not found')
+
+                connector = SimpleOracleConnector(
+                    host=connection.host,
+                    port=connection.port,
+                    service_name=connection.service_name,
+                    username=connection.username,
+                    password=connection.get_decrypted_password()
+                )
+
+                results = connector.execute_query(data_source.query_text)
+
+            elif data_source.source_type == 'static_data':
+                results = data_source.static_data or []
+
+            elif data_source.source_type == 'rest_api':
+                import requests
+                response = requests.request(
+                    method=data_source.api_method,
+                    url=data_source.api_url,
+                    headers=data_source.api_headers or {},
+                    json=data_source.api_body if data_source.api_method != 'GET' else None,
+                    timeout=30
+                )
+                response.raise_for_status()
+
+                data = response.json()
+                results = data if isinstance(data, list) else [data]
+
+            elif data_source.source_type == 'csv_upload':
+                results = data_source.csv_data or []
+
+            else:
+                raise Exception(f'Execution not implemented for source_type: {data_source.source_type}')
+
+            # Update cache
+            if data_source.cache_enabled:
+                data_source.cached_data = results
+                data_source.cached_at = datetime.utcnow()
+                db.session.commit()
+
+            execution_time = round(time.time() - start_time, 3)
+
+            return jsonify({
+                'success': True,
+                'data': results,
+                'metadata': {
+                    'row_count': len(results),
+                    'columns': list(results[0].keys()) if results else [],
+                    'cached': False,
+                    'execution_time': execution_time,
+                    'fetched_at': datetime.utcnow().isoformat()
+                }
+            }), 200
+
+        except Exception as exec_error:
+            logger.error(f"Execute data source error: {str(exec_error)}")
+            return jsonify({
+                'success': False,
+                'error': 'Data source execution failed',
+                'message': str(exec_error)
+            }), 400
+
+    except Exception as e:
+        logger.error(f"Execute dashboard data source error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to execute data source',
+            'message': str(e)
+        }), 500
+
+
+@dashboards_bp.route('/dashboards/<int:dashboard_id>/data-sources/<int:source_id>/refresh', methods=['POST'])
+@jwt_required()
+def refresh_dashboard_data_source(dashboard_id, source_id):
+    """
+    Refresh cached data for data source
+
+    POST /api/dashboards/<dashboard_id>/data-sources/<source_id>/refresh
+    Headers: Authorization: Bearer <access_token>
+
+    Response:
+    {
+        "success": true,
+        "message": "Data source refreshed successfully",
+        "metadata": {...}
+    }
+    """
+    try:
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+
+        if not user:
+            return jsonify({
+                'success': False,
+                'error': 'User not found'
+            }), 404
+
+        dashboard = Dashboard.query.get(dashboard_id)
+
+        if not dashboard:
+            return jsonify({
+                'success': False,
+                'error': 'Dashboard not found'
+            }), 404
+
+        # Check access (can view is enough to refresh)
+        if not DashboardService.can_view_dashboard(dashboard, user):
+            return jsonify({
+                'success': False,
+                'error': 'Access denied'
+            }), 403
+
+        data_source = DashboardDataSource.query.filter_by(
+            id=source_id,
+            dashboard_id=dashboard_id
+        ).first()
+
+        if not data_source:
+            return jsonify({
+                'success': False,
+                'error': 'Data source not found'
+            }), 404
+
+        # Clear cache
+        data_source.cached_data = None
+        data_source.cached_at = None
+        db.session.commit()
+
+        # Log action
+        AuditLog.log_action(
+            action='refresh_dashboard_data_source',
+            user=user,
+            resource_type='dashboard_data_source',
+            resource_id=data_source.id,
+            details={'dashboard_id': dashboard_id},
+            ip_address=request.remote_addr
+        )
+
+        return jsonify({
+            'success': True,
+            'message': 'Data source cache cleared. Data will be refreshed on next fetch.',
+            'metadata': {
+                'cache_cleared': True
+            }
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Refresh dashboard data source error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to refresh data source',
             'message': str(e)
         }), 500
