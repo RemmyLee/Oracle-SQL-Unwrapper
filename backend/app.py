@@ -61,6 +61,7 @@ def register_blueprints(app):
     from backend.api.users import users_bp
     from backend.api.roles import roles_bp
     from backend.api.admin import admin_bp
+    from backend.api.dashboards import dashboards_bp
 
     # Register API blueprints
     app.register_blueprint(unwrap_bp, url_prefix='/api')
@@ -73,6 +74,7 @@ def register_blueprints(app):
     app.register_blueprint(users_bp, url_prefix='/api')
     app.register_blueprint(roles_bp, url_prefix='/api')
     app.register_blueprint(admin_bp, url_prefix='/api')
+    app.register_blueprint(dashboards_bp, url_prefix='/api')
 
     # Root route for frontend
     @app.route('/')
