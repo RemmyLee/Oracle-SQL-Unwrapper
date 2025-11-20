@@ -63,6 +63,7 @@ def register_blueprints(app):
     from backend.api.admin import admin_bp
     from backend.api.dashboards import dashboards_bp
     from backend.api.health import health_bp
+    from backend.api.apex_integration import apex_bp
 
     # Register API blueprints
     app.register_blueprint(unwrap_bp, url_prefix='/api')
@@ -77,6 +78,7 @@ def register_blueprints(app):
     app.register_blueprint(admin_bp, url_prefix='/api')
     app.register_blueprint(dashboards_bp, url_prefix='/api')
     app.register_blueprint(health_bp, url_prefix='/api')
+    app.register_blueprint(apex_bp, url_prefix='/api')
 
     # Root route for frontend
     @app.route('/')
