@@ -80,23 +80,40 @@ user-agents==2.2.0
 zxcvbn==4.4.28
 
 # ============================================
-# Phase 5+: Dashboard System (Future)
+# Phase 5+: Dashboard System & Production Ready
 # ============================================
-# Uncomment when implementing Phase 5+
+
+# Database Migrations
+alembic==1.12.0
 
 # Task Queue & Caching
-# celery==5.3.4
-# redis==5.0.0
-
-# PDF Generation
-# WeasyPrint==60.1
-# Pillow==10.1.0
+celery==5.3.4
+redis==5.0.1
 
 # Production Server
-# gunicorn==21.2.0
+gunicorn==21.2.0
 
-# Monitoring
-# prometheus-flask-exporter==0.22.4
+# Monitoring & Metrics
+prometheus-flask-exporter==0.22.4
 
 # Rate Limiting
-# Flask-Limiter==3.5.0
+Flask-Limiter==3.5.0
+
+# API Documentation
+flasgger==0.9.7.1
+apispec==6.3.0
+
+# Request/Response Validation
+flask-pydantic==0.11.0
+
+# HTTP Requests (for REST API data sources)
+requests==2.31.0
+
+# Security Headers
+flask-talisman==1.1.0
+
+# Background Jobs
+APScheduler==3.10.4
+
+# System Monitoring
+psutil==5.9.6

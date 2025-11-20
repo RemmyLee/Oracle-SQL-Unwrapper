@@ -11,5 +11,6 @@ from .users import users_bp
 from .roles import roles_bp
 from .admin import admin_bp
 from .dashboards import dashboards_bp
+from .health import health_bp
 
-__all__ = ['unwrap_bp', 'connections_bp', 'queries_bp', 'export_bp', 'saved_queries_bp', 'templates_bp', 'auth_bp', 'users_bp', 'roles_bp', 'admin_bp', 'dashboards_bp']
+__all__ = ['unwrap_bp', 'connections_bp', 'queries_bp', 'export_bp', 'saved_queries_bp', 'templates_bp', 'auth_bp', 'users_bp', 'roles_bp', 'admin_bp', 'dashboards_bp', 'health_bp']
