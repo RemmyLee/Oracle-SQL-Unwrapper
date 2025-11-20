@@ -5,7 +5,7 @@ Handles dashboard CRUD, sharing, public access, and management
 
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from backend.models import Dashboard, User, AuditLog, DashboardShare, Role
+from backend.models import Dashboard, User, AuditLog, DashboardShare, Role, DashboardComponent, DashboardDataSource
 from backend.services import DashboardService
 from backend.extensions import db
 import logging
@@ -1431,5 +1431,688 @@ def verify_public_dashboard_password(token):
         return jsonify({
             'success': False,
             'error': 'Failed to verify password',
+            'message': str(e)
+        }), 500
+
+
+# ==========================================
+# Dashboard Component Management
+# ==========================================
+
+@dashboards_bp.route('/dashboards/<int:dashboard_id>/components', methods=['GET'])
+def list_dashboard_components(dashboard_id):
+    """
+    List all components for a dashboard
+
+    GET /api/dashboards/<dashboard_id>/components
+
+    Response:
+    {
+        "success": true,
+        "components": [...]
+    }
+    """
+    try:
+        user = get_current_user()
+
+        dashboard = Dashboard.query.get(dashboard_id)
+
+        if not dashboard:
+            return jsonify({
+                'success': False,
+                'error': 'Dashboard not found'
+            }), 404
+
+        # Check access
+        if not DashboardService.can_view_dashboard(dashboard, user):
+            return jsonify({
+                'success': False,
+                'error': 'Access denied',
+                'message': 'You do not have permission to view this dashboard'
+            }), 403
+
+        # Get all components ordered by position
+        components = DashboardComponent.query.filter_by(
+            dashboard_id=dashboard_id
+        ).order_by(DashboardComponent.order_index).all()
+
+        return jsonify({
+            'success': True,
+            'components': [comp.to_dict(include_data_source=True) for comp in components]
+        }), 200
+
+    except Exception as e:
+        logger.error(f"List dashboard components error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to list components',
+            'message': str(e)
+        }), 500
+
+
+@dashboards_bp.route('/dashboards/<int:dashboard_id>/components', methods=['POST'])
+@jwt_required()
+def add_dashboard_component(dashboard_id):
+    """
+    Add a new component to dashboard
+
+    POST /api/dashboards/<dashboard_id>/components
+    Headers: Authorization: Bearer <access_token>
+
+    Request Body:
+    {
+        "component_type": "chart",  # chart, table, metric, text, filter, image, etc.
+        "title": "Sales Chart",
+        "grid_position": {
+            "x": 0,
+            "y": 0,
+            "w": 6,
+            "h": 4,
+            "minW": 2,
+            "minH": 2
+        },
+        "config": {
+            "chart_type": "bar",
+            "colors": ["#3b82f6"],
+            ...
+        },
+        "data_source_id": 123,  # optional
+        "refresh_interval": 60,  # optional
+        "order_index": 0  # optional
+    }
+
+    Response:
+    {
+        "success": true,
+        "message": "Component added successfully",
+        "component": {...}
+    }
+    """
+    try:
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+
+        if not user:
+            return jsonify({
+                'success': False,
+                'error': 'User not found'
+            }), 404
+
+        dashboard = Dashboard.query.get(dashboard_id)
+
+        if not dashboard:
+            return jsonify({
+                'success': False,
+                'error': 'Dashboard not found'
+            }), 404
+
+        # Check permission
+        if not DashboardService.can_edit_dashboard(dashboard, user):
+            return jsonify({
+                'success': False,
+                'error': 'Access denied',
+                'message': 'You do not have permission to edit this dashboard'
+            }), 403
+
+        data = request.get_json()
+
+        # Required fields
+        component_type = data.get('component_type')
+        title = data.get('title')
+
+        if not component_type:
+            return jsonify({
+                'success': False,
+                'error': 'component_type is required'
+            }), 400
+
+        # Validate component type
+        valid_types = ['chart', 'table', 'metric', 'text', 'filter', 'image', 'iframe', 'map', 'gauge', 'progress']
+        if component_type not in valid_types:
+            return jsonify({
+                'success': False,
+                'error': f'Invalid component_type. Must be one of: {", ".join(valid_types)}'
+            }), 400
+
+        # Optional fields
+        description = data.get('description')
+        grid_position = data.get('grid_position', {})
+        config = data.get('config', {})
+        data_source_id = data.get('data_source_id')
+        refresh_interval = data.get('refresh_interval')
+        order_index = data.get('order_index')
+        is_visible = data.get('is_visible', True)
+
+        # Validate data source if provided
+        if data_source_id:
+            data_source = DashboardDataSource.query.get(data_source_id)
+            if not data_source:
+                return jsonify({
+                    'success': False,
+                    'error': 'Data source not found'
+                }), 404
+            if data_source.dashboard_id != dashboard_id:
+                return jsonify({
+                    'success': False,
+                    'error': 'Data source does not belong to this dashboard'
+                }), 400
+
+        # Get next order index if not provided
+        if order_index is None:
+            max_order = db.session.query(db.func.max(DashboardComponent.order_index)).filter_by(
+                dashboard_id=dashboard_id
+            ).scalar() or -1
+            order_index = max_order + 1
+
+        # Create component
+        component = DashboardComponent(
+            dashboard_id=dashboard_id,
+            component_type=component_type,
+            title=title,
+            description=description,
+            grid_position=grid_position,
+            config=config,
+            data_source_id=data_source_id,
+            refresh_interval=refresh_interval,
+            order_index=order_index,
+            is_visible=is_visible
+        )
+
+        db.session.add(component)
+        db.session.commit()
+
+        # Log action
+        AuditLog.log_action(
+            action='add_dashboard_component',
+            user=user,
+            resource_type='dashboard_component',
+            resource_id=component.id,
+            details={'dashboard_id': dashboard_id, 'component_type': component_type},
+            ip_address=request.remote_addr
+        )
+
+        return jsonify({
+            'success': True,
+            'message': 'Component added successfully',
+            'component': component.to_dict(include_data_source=True)
+        }), 201
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Add dashboard component error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to add component',
+            'message': str(e)
+        }), 500
+
+
+@dashboards_bp.route('/dashboards/<int:dashboard_id>/components/<int:component_id>', methods=['GET'])
+def get_dashboard_component(dashboard_id, component_id):
+    """
+    Get a specific component
+
+    GET /api/dashboards/<dashboard_id>/components/<component_id>
+
+    Response:
+    {
+        "success": true,
+        "component": {...}
+    }
+    """
+    try:
+        user = get_current_user()
+
+        dashboard = Dashboard.query.get(dashboard_id)
+
+        if not dashboard:
+            return jsonify({
+                'success': False,
+                'error': 'Dashboard not found'
+            }), 404
+
+        # Check access
+        if not DashboardService.can_view_dashboard(dashboard, user):
+            return jsonify({
+                'success': False,
+                'error': 'Access denied'
+            }), 403
+
+        component = DashboardComponent.query.filter_by(
+            id=component_id,
+            dashboard_id=dashboard_id
+        ).first()
+
+        if not component:
+            return jsonify({
+                'success': False,
+                'error': 'Component not found'
+            }), 404
+
+        return jsonify({
+            'success': True,
+            'component': component.to_dict(include_data_source=True)
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Get dashboard component error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to get component',
+            'message': str(e)
+        }), 500
+
+
+@dashboards_bp.route('/dashboards/<int:dashboard_id>/components/<int:component_id>', methods=['PUT'])
+@jwt_required()
+def update_dashboard_component(dashboard_id, component_id):
+    """
+    Update component
+
+    PUT /api/dashboards/<dashboard_id>/components/<component_id>
+    Headers: Authorization: Bearer <access_token>
+
+    Request Body:
+    {
+        "title": "Updated Title",
+        "grid_position": {...},
+        "config": {...},
+        "is_visible": false
+    }
+
+    Response:
+    {
+        "success": true,
+        "message": "Component updated successfully",
+        "component": {...}
+    }
+    """
+    try:
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+
+        if not user:
+            return jsonify({
+                'success': False,
+                'error': 'User not found'
+            }), 404
+
+        dashboard = Dashboard.query.get(dashboard_id)
+
+        if not dashboard:
+            return jsonify({
+                'success': False,
+                'error': 'Dashboard not found'
+            }), 404
+
+        component = DashboardComponent.query.filter_by(
+            id=component_id,
+            dashboard_id=dashboard_id
+        ).first()
+
+        if not component:
+            return jsonify({
+                'success': False,
+                'error': 'Component not found'
+            }), 404
+
+        # Check permission
+        if not DashboardService.can_edit_dashboard(dashboard, user):
+            return jsonify({
+                'success': False,
+                'error': 'Access denied',
+                'message': 'You do not have permission to edit this dashboard'
+            }), 403
+
+        data = request.get_json()
+
+        # Update fields
+        if 'title' in data:
+            component.title = data['title']
+        if 'description' in data:
+            component.description = data['description']
+        if 'grid_position' in data:
+            component.grid_position = data['grid_position']
+        if 'config' in data:
+            component.config = data['config']
+        if 'data_source_id' in data:
+            data_source_id = data['data_source_id']
+            if data_source_id:
+                data_source = DashboardDataSource.query.get(data_source_id)
+                if not data_source or data_source.dashboard_id != dashboard_id:
+                    return jsonify({
+                        'success': False,
+                        'error': 'Invalid data source'
+                    }), 400
+            component.data_source_id = data_source_id
+        if 'refresh_interval' in data:
+            component.refresh_interval = data['refresh_interval']
+        if 'is_visible' in data:
+            component.is_visible = data['is_visible']
+
+        component.updated_at = datetime.utcnow()
+        db.session.commit()
+
+        # Log action
+        AuditLog.log_action(
+            action='update_dashboard_component',
+            user=user,
+            resource_type='dashboard_component',
+            resource_id=component.id,
+            details={'dashboard_id': dashboard_id},
+            ip_address=request.remote_addr
+        )
+
+        return jsonify({
+            'success': True,
+            'message': 'Component updated successfully',
+            'component': component.to_dict(include_data_source=True)
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Update dashboard component error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to update component',
+            'message': str(e)
+        }), 500
+
+
+@dashboards_bp.route('/dashboards/<int:dashboard_id>/components/<int:component_id>', methods=['DELETE'])
+@jwt_required()
+def delete_dashboard_component(dashboard_id, component_id):
+    """
+    Delete component
+
+    DELETE /api/dashboards/<dashboard_id>/components/<component_id>
+    Headers: Authorization: Bearer <access_token>
+
+    Response:
+    {
+        "success": true,
+        "message": "Component deleted successfully"
+    }
+    """
+    try:
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+
+        if not user:
+            return jsonify({
+                'success': False,
+                'error': 'User not found'
+            }), 404
+
+        dashboard = Dashboard.query.get(dashboard_id)
+
+        if not dashboard:
+            return jsonify({
+                'success': False,
+                'error': 'Dashboard not found'
+            }), 404
+
+        component = DashboardComponent.query.filter_by(
+            id=component_id,
+            dashboard_id=dashboard_id
+        ).first()
+
+        if not component:
+            return jsonify({
+                'success': False,
+                'error': 'Component not found'
+            }), 404
+
+        # Check permission
+        if not DashboardService.can_edit_dashboard(dashboard, user):
+            return jsonify({
+                'success': False,
+                'error': 'Access denied',
+                'message': 'You do not have permission to edit this dashboard'
+            }), 403
+
+        # Log action before deletion
+        AuditLog.log_action(
+            action='delete_dashboard_component',
+            user=user,
+            resource_type='dashboard_component',
+            resource_id=component.id,
+            details={'dashboard_id': dashboard_id, 'component_type': component.component_type},
+            ip_address=request.remote_addr
+        )
+
+        db.session.delete(component)
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': 'Component deleted successfully'
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Delete dashboard component error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to delete component',
+            'message': str(e)
+        }), 500
+
+
+@dashboards_bp.route('/dashboards/<int:dashboard_id>/components/reorder', methods=['POST'])
+@jwt_required()
+def reorder_dashboard_components(dashboard_id):
+    """
+    Reorder/rearrange components
+
+    POST /api/dashboards/<dashboard_id>/components/reorder
+    Headers: Authorization: Bearer <access_token>
+
+    Request Body:
+    {
+        "component_orders": [
+            {"id": 1, "order_index": 0},
+            {"id": 2, "order_index": 1},
+            {"id": 3, "order_index": 2}
+        ]
+    }
+
+    Response:
+    {
+        "success": true,
+        "message": "Components reordered successfully"
+    }
+    """
+    try:
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+
+        if not user:
+            return jsonify({
+                'success': False,
+                'error': 'User not found'
+            }), 404
+
+        dashboard = Dashboard.query.get(dashboard_id)
+
+        if not dashboard:
+            return jsonify({
+                'success': False,
+                'error': 'Dashboard not found'
+            }), 404
+
+        # Check permission
+        if not DashboardService.can_edit_dashboard(dashboard, user):
+            return jsonify({
+                'success': False,
+                'error': 'Access denied',
+                'message': 'You do not have permission to edit this dashboard'
+            }), 403
+
+        data = request.get_json()
+        component_orders = data.get('component_orders', [])
+
+        if not component_orders:
+            return jsonify({
+                'success': False,
+                'error': 'component_orders is required'
+            }), 400
+
+        # Update order for each component
+        for order_item in component_orders:
+            component_id = order_item.get('id')
+            order_index = order_item.get('order_index')
+
+            if component_id is None or order_index is None:
+                continue
+
+            component = DashboardComponent.query.filter_by(
+                id=component_id,
+                dashboard_id=dashboard_id
+            ).first()
+
+            if component:
+                component.order_index = order_index
+
+        db.session.commit()
+
+        # Log action
+        AuditLog.log_action(
+            action='reorder_dashboard_components',
+            user=user,
+            resource_type='dashboard',
+            resource_id=dashboard_id,
+            details={'component_count': len(component_orders)},
+            ip_address=request.remote_addr
+        )
+
+        return jsonify({
+            'success': True,
+            'message': 'Components reordered successfully'
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Reorder dashboard components error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to reorder components',
+            'message': str(e)
+        }), 500
+
+
+@dashboards_bp.route('/dashboards/<int:dashboard_id>/components/<int:component_id>/duplicate', methods=['POST'])
+@jwt_required()
+def duplicate_dashboard_component(dashboard_id, component_id):
+    """
+    Duplicate a component
+
+    POST /api/dashboards/<dashboard_id>/components/<component_id>/duplicate
+    Headers: Authorization: Bearer <access_token>
+
+    Request Body (optional):
+    {
+        "title": "Copy of Chart"  # optional override
+    }
+
+    Response:
+    {
+        "success": true,
+        "message": "Component duplicated successfully",
+        "component": {...}
+    }
+    """
+    try:
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+
+        if not user:
+            return jsonify({
+                'success': False,
+                'error': 'User not found'
+            }), 404
+
+        dashboard = Dashboard.query.get(dashboard_id)
+
+        if not dashboard:
+            return jsonify({
+                'success': False,
+                'error': 'Dashboard not found'
+            }), 404
+
+        component = DashboardComponent.query.filter_by(
+            id=component_id,
+            dashboard_id=dashboard_id
+        ).first()
+
+        if not component:
+            return jsonify({
+                'success': False,
+                'error': 'Component not found'
+            }), 404
+
+        # Check permission
+        if not DashboardService.can_edit_dashboard(dashboard, user):
+            return jsonify({
+                'success': False,
+                'error': 'Access denied',
+                'message': 'You do not have permission to edit this dashboard'
+            }), 403
+
+        data = request.get_json() or {}
+
+        # Get next order index
+        max_order = db.session.query(db.func.max(DashboardComponent.order_index)).filter_by(
+            dashboard_id=dashboard_id
+        ).scalar() or -1
+
+        # Create duplicate
+        new_title = data.get('title', f"{component.title} (Copy)")
+
+        # Offset grid position slightly to avoid overlap
+        new_grid_position = component.grid_position.copy() if component.grid_position else {}
+        if 'x' in new_grid_position:
+            new_grid_position['x'] = new_grid_position['x'] + 1
+        if 'y' in new_grid_position:
+            new_grid_position['y'] = new_grid_position['y'] + 1
+
+        duplicate = DashboardComponent(
+            dashboard_id=dashboard_id,
+            component_type=component.component_type,
+            title=new_title,
+            description=component.description,
+            grid_position=new_grid_position,
+            config=component.config.copy() if component.config else {},
+            data_source_id=component.data_source_id,
+            refresh_interval=component.refresh_interval,
+            order_index=max_order + 1,
+            is_visible=component.is_visible
+        )
+
+        db.session.add(duplicate)
+        db.session.commit()
+
+        # Log action
+        AuditLog.log_action(
+            action='duplicate_dashboard_component',
+            user=user,
+            resource_type='dashboard_component',
+            resource_id=duplicate.id,
+            details={'dashboard_id': dashboard_id, 'source_component_id': component_id},
+            ip_address=request.remote_addr
+        )
+
+        return jsonify({
+            'success': True,
+            'message': 'Component duplicated successfully',
+            'component': duplicate.to_dict(include_data_source=True)
+        }), 201
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Duplicate dashboard component error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to duplicate component',
             'message': str(e)
         }), 500
