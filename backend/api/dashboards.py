@@ -5,7 +5,7 @@ Handles dashboard CRUD, sharing, public access, and management
 
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from backend.models import Dashboard, User, AuditLog, DashboardShare, Role, DashboardComponent, DashboardDataSource, OracleConnection
+from backend.models import Dashboard, User, AuditLog, DashboardShare, Role, DashboardComponent, DashboardDataSource, OracleConnection, DashboardVersion
 from backend.services import DashboardService, SimpleOracleConnector
 from backend.extensions import db
 import logging
@@ -3048,5 +3048,650 @@ def refresh_dashboard_data_source(dashboard_id, source_id):
         return jsonify({
             'success': False,
             'error': 'Failed to refresh data source',
+            'message': str(e)
+        }), 500
+
+
+# ==========================================
+# Dashboard Version Control
+# ==========================================
+
+@dashboards_bp.route('/dashboards/<int:dashboard_id>/versions', methods=['GET'])
+@jwt_required()
+def list_dashboard_versions(dashboard_id):
+    """
+    List all versions for a dashboard
+
+    GET /api/dashboards/<dashboard_id>/versions
+    Headers: Authorization: Bearer <access_token>
+
+    Query Parameters:
+    - page: Page number (default: 1)
+    - per_page: Items per page (default: 20)
+
+    Response:
+    {
+        "success": true,
+        "versions": [...],
+        "pagination": {...}
+    }
+    """
+    try:
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+
+        if not user:
+            return jsonify({
+                'success': False,
+                'error': 'User not found'
+            }), 404
+
+        dashboard = Dashboard.query.get(dashboard_id)
+
+        if not dashboard:
+            return jsonify({
+                'success': False,
+                'error': 'Dashboard not found'
+            }), 404
+
+        # Check permission (need to view to see versions)
+        if not DashboardService.can_view_dashboard(dashboard, user):
+            return jsonify({
+                'success': False,
+                'error': 'Access denied',
+                'message': 'You do not have permission to view this dashboard'
+            }), 403
+
+        # Pagination
+        page = request.args.get('page', 1, type=int)
+        per_page = min(request.args.get('per_page', 20, type=int), 100)
+
+        # Get versions
+        versions_query = DashboardVersion.query.filter_by(
+            dashboard_id=dashboard_id
+        ).order_by(DashboardVersion.created_at.desc())
+
+        pagination_obj = versions_query.paginate(page=page, per_page=per_page, error_out=False)
+
+        pagination = {
+            'page': page,
+            'per_page': per_page,
+            'total': pagination_obj.total,
+            'pages': pagination_obj.pages,
+            'has_next': pagination_obj.has_next,
+            'has_prev': pagination_obj.has_prev
+        }
+
+        return jsonify({
+            'success': True,
+            'versions': [v.to_dict(include_user=True) for v in pagination_obj.items],
+            'pagination': pagination
+        }), 200
+
+    except Exception as e:
+        logger.error(f"List dashboard versions error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to list versions',
+            'message': str(e)
+        }), 500
+
+
+@dashboards_bp.route('/dashboards/<int:dashboard_id>/versions', methods=['POST'])
+@jwt_required()
+def create_dashboard_version(dashboard_id):
+    """
+    Create a new version snapshot
+
+    POST /api/dashboards/<dashboard_id>/versions
+    Headers: Authorization: Bearer <access_token>
+
+    Request Body:
+    {
+        "change_summary": "Added new sales chart",  # optional
+        "is_major_version": false  # optional, default false
+    }
+
+    Response:
+    {
+        "success": true,
+        "message": "Version created successfully",
+        "version": {...}
+    }
+    """
+    try:
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+
+        if not user:
+            return jsonify({
+                'success': False,
+                'error': 'User not found'
+            }), 404
+
+        dashboard = Dashboard.query.get(dashboard_id)
+
+        if not dashboard:
+            return jsonify({
+                'success': False,
+                'error': 'Dashboard not found'
+            }), 404
+
+        # Check permission (need edit permission to create versions)
+        if not DashboardService.can_edit_dashboard(dashboard, user):
+            return jsonify({
+                'success': False,
+                'error': 'Access denied',
+                'message': 'You do not have permission to create versions for this dashboard'
+            }), 403
+
+        data = request.get_json() or {}
+
+        change_summary = data.get('change_summary')
+        is_major = data.get('is_major_version', False)
+
+        # Create version
+        version, error = DashboardService.create_version(
+            dashboard=dashboard,
+            user=user,
+            change_summary=change_summary,
+            is_major=is_major
+        )
+
+        if error:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to create version',
+                'message': error
+            }), 400
+
+        return jsonify({
+            'success': True,
+            'message': 'Version created successfully',
+            'version': version.to_dict(include_user=True)
+        }), 201
+
+    except Exception as e:
+        logger.error(f"Create dashboard version error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to create version',
+            'message': str(e)
+        }), 500
+
+
+@dashboards_bp.route('/dashboards/<int:dashboard_id>/versions/<int:version_id>', methods=['GET'])
+@jwt_required()
+def get_dashboard_version(dashboard_id, version_id):
+    """
+    Get a specific version
+
+    GET /api/dashboards/<dashboard_id>/versions/<version_id>
+    Headers: Authorization: Bearer <access_token>
+
+    Response:
+    {
+        "success": true,
+        "version": {...}
+    }
+    """
+    try:
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+
+        if not user:
+            return jsonify({
+                'success': False,
+                'error': 'User not found'
+            }), 404
+
+        dashboard = Dashboard.query.get(dashboard_id)
+
+        if not dashboard:
+            return jsonify({
+                'success': False,
+                'error': 'Dashboard not found'
+            }), 404
+
+        # Check permission
+        if not DashboardService.can_view_dashboard(dashboard, user):
+            return jsonify({
+                'success': False,
+                'error': 'Access denied'
+            }), 403
+
+        version = DashboardVersion.query.filter_by(
+            id=version_id,
+            dashboard_id=dashboard_id
+        ).first()
+
+        if not version:
+            return jsonify({
+                'success': False,
+                'error': 'Version not found'
+            }), 404
+
+        return jsonify({
+            'success': True,
+            'version': version.to_dict(include_user=True, include_snapshots=True)
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Get dashboard version error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to get version',
+            'message': str(e)
+        }), 500
+
+
+@dashboards_bp.route('/dashboards/<int:dashboard_id>/versions/<int:version_id>/restore', methods=['POST'])
+@jwt_required()
+def restore_dashboard_version(dashboard_id, version_id):
+    """
+    Restore dashboard to a specific version
+
+    POST /api/dashboards/<dashboard_id>/versions/<version_id>/restore
+    Headers: Authorization: Bearer <access_token>
+
+    Request Body:
+    {
+        "create_backup": true  # optional, create backup of current state before restore
+    }
+
+    Response:
+    {
+        "success": true,
+        "message": "Dashboard restored successfully",
+        "dashboard": {...},
+        "backup_version": {...}  # if create_backup was true
+    }
+    """
+    try:
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+
+        if not user:
+            return jsonify({
+                'success': False,
+                'error': 'User not found'
+            }), 404
+
+        dashboard = Dashboard.query.get(dashboard_id)
+
+        if not dashboard:
+            return jsonify({
+                'success': False,
+                'error': 'Dashboard not found'
+            }), 404
+
+        # Check permission (need edit permission to restore)
+        if not DashboardService.can_edit_dashboard(dashboard, user):
+            return jsonify({
+                'success': False,
+                'error': 'Access denied',
+                'message': 'You do not have permission to restore versions for this dashboard'
+            }), 403
+
+        version = DashboardVersion.query.filter_by(
+            id=version_id,
+            dashboard_id=dashboard_id
+        ).first()
+
+        if not version:
+            return jsonify({
+                'success': False,
+                'error': 'Version not found'
+            }), 404
+
+        data = request.get_json() or {}
+        create_backup = data.get('create_backup', True)
+
+        # Create backup of current state before restore
+        backup_version = None
+        if create_backup:
+            backup_version, error = DashboardService.create_version(
+                dashboard=dashboard,
+                user=user,
+                change_summary=f"Backup before restoring to version {version.version_number}",
+                is_major=False
+            )
+
+            if error:
+                return jsonify({
+                    'success': False,
+                    'error': 'Failed to create backup',
+                    'message': error
+                }), 400
+
+        # Restore from version
+        if not version.dashboard_snapshot or not version.components_snapshot:
+            return jsonify({
+                'success': False,
+                'error': 'Version snapshot is incomplete',
+                'message': 'Cannot restore from this version'
+            }), 400
+
+        try:
+            # Restore dashboard properties
+            snapshot = version.dashboard_snapshot
+            dashboard.title = snapshot.get('title', dashboard.title)
+            dashboard.description = snapshot.get('description', dashboard.description)
+            dashboard.layout_config = snapshot.get('layout_config')
+            dashboard.theme = snapshot.get('theme', dashboard.theme)
+            dashboard.refresh_interval = snapshot.get('refresh_interval')
+            dashboard.allow_embedding = snapshot.get('allow_embedding', False)
+            dashboard.allow_export = snapshot.get('allow_export', True)
+            dashboard.allow_filters = snapshot.get('allow_filters', True)
+
+            # Delete existing components
+            DashboardComponent.query.filter_by(dashboard_id=dashboard_id).delete()
+
+            # Restore components from snapshot
+            for comp_snapshot in version.components_snapshot:
+                component = DashboardComponent(
+                    dashboard_id=dashboard_id,
+                    component_type=comp_snapshot['component_type'],
+                    title=comp_snapshot.get('title'),
+                    description=comp_snapshot.get('description'),
+                    grid_position=comp_snapshot.get('grid_position'),
+                    config=comp_snapshot.get('config'),
+                    data_source_id=comp_snapshot.get('data_source_id'),
+                    refresh_interval=comp_snapshot.get('refresh_interval'),
+                    order_index=comp_snapshot.get('order_index', 0),
+                    is_visible=comp_snapshot.get('is_visible', True)
+                )
+                db.session.add(component)
+
+            dashboard.updated_at = datetime.utcnow()
+            db.session.commit()
+
+            # Log action
+            AuditLog.log_action(
+                action='restore_dashboard_version',
+                user=user,
+                resource_type='dashboard',
+                resource_id=dashboard_id,
+                details={
+                    'version_id': version_id,
+                    'version_number': version.version_number,
+                    'backup_created': create_backup
+                },
+                ip_address=request.remote_addr
+            )
+
+            response_data = {
+                'success': True,
+                'message': f'Dashboard restored to version {version.version_number}',
+                'dashboard': dashboard.to_dict()
+            }
+
+            if backup_version:
+                response_data['backup_version'] = backup_version.to_dict()
+
+            return jsonify(response_data), 200
+
+        except Exception as restore_error:
+            db.session.rollback()
+            logger.error(f"Restore failed: {str(restore_error)}")
+            return jsonify({
+                'success': False,
+                'error': 'Failed to restore version',
+                'message': str(restore_error)
+            }), 400
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Restore dashboard version error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to restore version',
+            'message': str(e)
+        }), 500
+
+
+@dashboards_bp.route('/dashboards/<int:dashboard_id>/versions/<int:version_id>', methods=['DELETE'])
+@jwt_required()
+def delete_dashboard_version(dashboard_id, version_id):
+    """
+    Delete a version
+
+    DELETE /api/dashboards/<dashboard_id>/versions/<version_id>
+    Headers: Authorization: Bearer <access_token>
+
+    Response:
+    {
+        "success": true,
+        "message": "Version deleted successfully"
+    }
+    """
+    try:
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+
+        if not user:
+            return jsonify({
+                'success': False,
+                'error': 'User not found'
+            }), 404
+
+        dashboard = Dashboard.query.get(dashboard_id)
+
+        if not dashboard:
+            return jsonify({
+                'success': False,
+                'error': 'Dashboard not found'
+            }), 404
+
+        # Check permission (need edit permission to delete versions)
+        if not DashboardService.can_edit_dashboard(dashboard, user):
+            return jsonify({
+                'success': False,
+                'error': 'Access denied',
+                'message': 'You do not have permission to delete versions for this dashboard'
+            }), 403
+
+        version = DashboardVersion.query.filter_by(
+            id=version_id,
+            dashboard_id=dashboard_id
+        ).first()
+
+        if not version:
+            return jsonify({
+                'success': False,
+                'error': 'Version not found'
+            }), 404
+
+        # Log action before deletion
+        AuditLog.log_action(
+            action='delete_dashboard_version',
+            user=user,
+            resource_type='dashboard_version',
+            resource_id=version_id,
+            details={
+                'dashboard_id': dashboard_id,
+                'version_number': version.version_number
+            },
+            ip_address=request.remote_addr
+        )
+
+        db.session.delete(version)
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': 'Version deleted successfully'
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Delete dashboard version error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to delete version',
+            'message': str(e)
+        }), 500
+
+
+@dashboards_bp.route('/dashboards/<int:dashboard_id>/versions/compare', methods=['POST'])
+@jwt_required()
+def compare_dashboard_versions(dashboard_id):
+    """
+    Compare two versions or current state with a version
+
+    POST /api/dashboards/<dashboard_id>/versions/compare
+    Headers: Authorization: Bearer <access_token>
+
+    Request Body:
+    {
+        "version_a_id": 123,  # optional, if null compares with current state
+        "version_b_id": 456   # required
+    }
+
+    Response:
+    {
+        "success": true,
+        "comparison": {
+            "dashboard_changes": {...},
+            "components_added": [...],
+            "components_removed": [...],
+            "components_modified": [...]
+        }
+    }
+    """
+    try:
+        user_id = get_jwt_identity()
+        user = User.query.get(user_id)
+
+        if not user:
+            return jsonify({
+                'success': False,
+                'error': 'User not found'
+            }), 404
+
+        dashboard = Dashboard.query.get(dashboard_id)
+
+        if not dashboard:
+            return jsonify({
+                'success': False,
+                'error': 'Dashboard not found'
+            }), 404
+
+        # Check permission
+        if not DashboardService.can_view_dashboard(dashboard, user):
+            return jsonify({
+                'success': False,
+                'error': 'Access denied'
+            }), 403
+
+        data = request.get_json()
+        version_a_id = data.get('version_a_id')
+        version_b_id = data.get('version_b_id')
+
+        if not version_b_id:
+            return jsonify({
+                'success': False,
+                'error': 'version_b_id is required'
+            }), 400
+
+        # Get version B (required)
+        version_b = DashboardVersion.query.filter_by(
+            id=version_b_id,
+            dashboard_id=dashboard_id
+        ).first()
+
+        if not version_b:
+            return jsonify({
+                'success': False,
+                'error': 'Version B not found'
+            }), 404
+
+        # Get version A or use current state
+        if version_a_id:
+            version_a = DashboardVersion.query.filter_by(
+                id=version_a_id,
+                dashboard_id=dashboard_id
+            ).first()
+
+            if not version_a:
+                return jsonify({
+                    'success': False,
+                    'error': 'Version A not found'
+                }), 404
+
+            snapshot_a = version_a.dashboard_snapshot
+            components_a = version_a.components_snapshot
+        else:
+            # Use current state
+            snapshot_a = dashboard.to_dict()
+            components_a = [comp.to_dict() for comp in dashboard.components]
+
+        snapshot_b = version_b.dashboard_snapshot
+        components_b = version_b.components_snapshot
+
+        # Compare dashboard properties
+        dashboard_changes = {}
+        for key in ['title', 'description', 'theme', 'layout_config', 'refresh_interval']:
+            val_a = snapshot_a.get(key)
+            val_b = snapshot_b.get(key)
+            if val_a != val_b:
+                dashboard_changes[key] = {
+                    'old': val_b,
+                    'new': val_a
+                }
+
+        # Compare components
+        components_a_dict = {c.get('id') or c.get('title'): c for c in components_a}
+        components_b_dict = {c.get('id') or c.get('title'): c for c in components_b}
+
+        components_added = []
+        components_removed = []
+        components_modified = []
+
+        # Find added and modified
+        for key, comp_a in components_a_dict.items():
+            if key not in components_b_dict:
+                components_added.append(comp_a)
+            else:
+                comp_b = components_b_dict[key]
+                changes = {}
+                for field in ['title', 'component_type', 'grid_position', 'config']:
+                    if comp_a.get(field) != comp_b.get(field):
+                        changes[field] = {
+                            'old': comp_b.get(field),
+                            'new': comp_a.get(field)
+                        }
+                if changes:
+                    components_modified.append({
+                        'component': comp_a,
+                        'changes': changes
+                    })
+
+        # Find removed
+        for key, comp_b in components_b_dict.items():
+            if key not in components_a_dict:
+                components_removed.append(comp_b)
+
+        return jsonify({
+            'success': True,
+            'comparison': {
+                'dashboard_changes': dashboard_changes,
+                'components_added': components_added,
+                'components_removed': components_removed,
+                'components_modified': components_modified,
+                'summary': {
+                    'dashboard_changed': len(dashboard_changes) > 0,
+                    'components_added_count': len(components_added),
+                    'components_removed_count': len(components_removed),
+                    'components_modified_count': len(components_modified)
+                }
+            }
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Compare dashboard versions error: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to compare versions',
             'message': str(e)
         }), 500
