@@ -40,6 +40,54 @@ def init_extensions(app):
     # JWT Manager (for API authentication)
     jwt.init_app(app)
 
+    # JWT error handlers
+    from flask import jsonify
+
+    @jwt.expired_token_loader
+    def expired_token_callback(jwt_header, jwt_payload):
+        """Handle expired JWT tokens"""
+        return jsonify({
+            'success': False,
+            'error': 'Token has expired',
+            'message': 'Please log in again to get a new token'
+        }), 401
+
+    @jwt.invalid_token_loader
+    def invalid_token_callback(error):
+        """Handle invalid JWT tokens"""
+        return jsonify({
+            'success': False,
+            'error': 'Invalid token',
+            'message': 'The provided token is invalid'
+        }), 401
+
+    @jwt.unauthorized_loader
+    def unauthorized_callback(error):
+        """Handle missing JWT tokens"""
+        return jsonify({
+            'success': False,
+            'error': 'Authorization required',
+            'message': 'Please provide a valid access token'
+        }), 401
+
+    @jwt.revoked_token_loader
+    def revoked_token_callback(jwt_header, jwt_payload):
+        """Handle revoked JWT tokens"""
+        return jsonify({
+            'success': False,
+            'error': 'Token has been revoked',
+            'message': 'This token is no longer valid'
+        }), 401
+
+    @jwt.needs_fresh_token_loader
+    def needs_fresh_token_callback(jwt_header, jwt_payload):
+        """Handle requests requiring fresh tokens"""
+        return jsonify({
+            'success': False,
+            'error': 'Fresh token required',
+            'message': 'This action requires a fresh access token. Please log in again.'
+        }), 401
+
     # Mail
     mail.init_app(app)
 
