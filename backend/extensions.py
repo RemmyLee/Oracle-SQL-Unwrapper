@@ -9,6 +9,8 @@ from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 from flask_mail import Mail
 from flask_caching import Cache
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 # Initialize extensions (without app context)
 db = SQLAlchemy()
@@ -17,6 +19,11 @@ cors = CORS()
 jwt = JWTManager()
 mail = Mail()
 cache = Cache()
+limiter = Limiter(
+    key_func=get_remote_address,
+    default_limits=["100 per minute"],
+    storage_uri="memory://"  # Will be overridden by config
+)
 
 
 def init_extensions(app):
@@ -93,6 +100,13 @@ def init_extensions(app):
 
     # Cache
     cache.init_app(app)
+
+    # Rate Limiter
+    if app.config.get('RATELIMIT_ENABLED', True):
+        limiter.init_app(app)
+        # Override storage with config
+        if app.config.get('RATELIMIT_STORAGE_URL'):
+            limiter.storage_uri = app.config['RATELIMIT_STORAGE_URL']
 
     # CORS
     cors.init_app(app, origins=app.config.get('CORS_ORIGINS', ['*']))

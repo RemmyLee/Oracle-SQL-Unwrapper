@@ -7,7 +7,7 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from backend.models import Dashboard, User, AuditLog, DashboardShare, Role, DashboardComponent, DashboardDataSource, OracleConnection, DashboardVersion, DashboardTemplate
 from backend.services import DashboardService, SimpleOracleConnector
-from backend.extensions import db
+from backend.extensions import db, limiter
 import logging
 from datetime import datetime, timedelta
 import json
@@ -1290,6 +1290,7 @@ def revoke_public_link(dashboard_id):
 
 
 @dashboards_bp.route('/public/dashboards/<token>', methods=['GET'])
+@limiter.limit("50 per minute")
 def access_public_dashboard(token):
     """
     Access public dashboard by token (no authentication required)
@@ -1376,6 +1377,7 @@ def access_public_dashboard(token):
 
 
 @dashboards_bp.route('/public/dashboards/<token>/verify-password', methods=['POST'])
+@limiter.limit("10 per minute")
 def verify_public_dashboard_password(token):
     """
     Verify password for password-protected public dashboard
@@ -3702,6 +3704,7 @@ def compare_dashboard_versions(dashboard_id):
 # ==========================================
 
 @dashboards_bp.route('/templates', methods=['GET'])
+@limiter.limit("100 per minute")
 def list_dashboard_templates():
     """
     List available dashboard templates

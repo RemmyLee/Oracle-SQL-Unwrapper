@@ -10,7 +10,7 @@ from flask_jwt_extended import (
 )
 from backend.services import AuthService
 from backend.models import User, Session
-from backend.extensions import db
+from backend.extensions import db, limiter
 import logging
 
 logger = logging.getLogger(__name__)
@@ -32,6 +32,7 @@ def get_user_agent():
 
 
 @auth_bp.route('/auth/register', methods=['POST'])
+@limiter.limit("5 per minute")
 def register():
     """
     Register a new user
@@ -106,6 +107,7 @@ def register():
 
 
 @auth_bp.route('/auth/login', methods=['POST'])
+@limiter.limit("5 per minute")
 def login():
     """
     Login user and create session
@@ -329,6 +331,7 @@ def verify_email():
 
 
 @auth_bp.route('/auth/resend-verification', methods=['POST'])
+@limiter.limit("3 per minute")
 def resend_verification():
     """
     Resend email verification
@@ -389,6 +392,7 @@ def resend_verification():
 
 
 @auth_bp.route('/auth/forgot-password', methods=['POST'])
+@limiter.limit("3 per minute")
 def forgot_password():
     """
     Request password reset
@@ -438,6 +442,7 @@ def forgot_password():
 
 
 @auth_bp.route('/auth/reset-password', methods=['POST'])
+@limiter.limit("5 per minute")
 def reset_password():
     """
     Reset password using token
