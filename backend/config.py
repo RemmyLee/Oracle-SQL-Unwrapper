@@ -53,6 +53,41 @@ class Config:
     # CORS
     CORS_ORIGINS = os.environ.get('CORS_ORIGINS', '*').split(',')
 
+    # JWT Configuration
+    JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY') or SECRET_KEY
+    JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=1)
+    JWT_REFRESH_TOKEN_EXPIRES = timedelta(days=30)
+    JWT_TOKEN_LOCATION = ['headers', 'cookies']
+    JWT_COOKIE_SECURE = False  # Set to True in production
+    JWT_COOKIE_CSRF_PROTECT = True
+    JWT_COOKIE_SAMESITE = 'Lax'
+
+    # Email Configuration (Flask-Mail)
+    MAIL_SERVER = os.environ.get('MAIL_SERVER', 'localhost')
+    MAIL_PORT = int(os.environ.get('MAIL_PORT', 587))
+    MAIL_USE_TLS = os.environ.get('MAIL_USE_TLS', 'true').lower() == 'true'
+    MAIL_USE_SSL = os.environ.get('MAIL_USE_SSL', 'false').lower() == 'true'
+    MAIL_USERNAME = os.environ.get('MAIL_USERNAME')
+    MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD')
+    MAIL_DEFAULT_SENDER = os.environ.get('MAIL_DEFAULT_SENDER', 'noreply@plsql-workbench.local')
+
+    # Cache Configuration
+    CACHE_TYPE = 'simple'  # Use Redis in production
+    CACHE_DEFAULT_TIMEOUT = 300  # 5 minutes
+    CACHE_KEY_PREFIX = 'plsql_workbench:'
+
+    # User Management
+    PASSWORD_MIN_LENGTH = 8
+    PASSWORD_REQUIRE_UPPERCASE = True
+    PASSWORD_REQUIRE_LOWERCASE = True
+    PASSWORD_REQUIRE_DIGITS = True
+    PASSWORD_REQUIRE_SPECIAL = True
+    ACCOUNT_LOCKOUT_ATTEMPTS = 5
+    ACCOUNT_LOCKOUT_DURATION = timedelta(minutes=30)
+    EMAIL_VERIFICATION_REQUIRED = True
+    EMAIL_VERIFICATION_TOKEN_EXPIRES = timedelta(days=1)
+    PASSWORD_RESET_TOKEN_EXPIRES = timedelta(hours=1)
+
 
 class DevelopmentConfig(Config):
     """Development configuration"""
@@ -93,9 +128,17 @@ class ProductionConfig(Config):
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = 'Lax'
 
+    # JWT security in production
+    JWT_COOKIE_SECURE = True
+
     # Require environment variables in production
     SECRET_KEY = os.environ.get('SECRET_KEY')
     ENCRYPTION_KEY = os.environ.get('ENCRYPTION_KEY')
+    JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY') or SECRET_KEY
+
+    # Cache with Redis in production
+    CACHE_TYPE = 'redis'
+    CACHE_REDIS_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
 
     # Logging
     LOG_LEVEL = 'INFO'
