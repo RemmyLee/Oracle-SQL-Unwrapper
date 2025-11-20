@@ -1,0 +1,193 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:13-alpine
+    container_name: plsql-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-plsql_workbench}
+      POSTGRES_USER: ${POSTGRES_USER:-plsql_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-plsql_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - plsql-network
+    restart: unless-stopped
+
+  # Redis Cache
+  redis:
+    image: redis:6-alpine
+    container_name: plsql-redis
+    command: redis-server --requirepass ${REDIS_PASSWORD:-changeme} --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - plsql-network
+    restart: unless-stopped
+
+  # PL/SQL Workbench Application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: plsql-app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      # Flask
+      FLASK_ENV: ${FLASK_ENV:-production}
+      FLASK_DEBUG: ${FLASK_DEBUG:-False}
+      PORT: 8000
+
+      # Security
+      SECRET_KEY: ${SECRET_KEY:-changeme-generate-secure-key}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-changeme-generate-secure-key}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-changeme-generate-secure-key}
+
+      # Database
+      DATABASE_URL: postgresql://${POSTGRES_USER:-plsql_user}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/${POSTGRES_DB:-plsql_workbench}
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-10}
+      DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-20}
+      DB_POOL_TIMEOUT: ${DB_POOL_TIMEOUT:-30}
+      DB_POOL_RECYCLE: ${DB_POOL_RECYCLE:-3600}
+
+      # Redis
+      REDIS_URL: redis://:${REDIS_PASSWORD:-changeme}@redis:6379/0
+
+      # Email (optional - configure if needed)
+      MAIL_SERVER: ${MAIL_SERVER:-smtp.gmail.com}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USE_TLS: ${MAIL_USE_TLS:-True}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_DEFAULT_SENDER: ${MAIL_DEFAULT_SENDER:-noreply@plsqlworkbench.com}
+
+      # CORS
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:3117}
+
+      # Dashboard Settings
+      DASHBOARD_MAX_COMPONENTS: ${DASHBOARD_MAX_COMPONENTS:-50}
+      DASHBOARD_MAX_DATA_SOURCES: ${DASHBOARD_MAX_DATA_SOURCES:-20}
+      DASHBOARD_CACHE_DEFAULT_TTL: ${DASHBOARD_CACHE_DEFAULT_TTL:-300}
+
+      # Rate Limiting
+      RATELIMIT_ENABLED: ${RATELIMIT_ENABLED:-true}
+      RATELIMIT_DEFAULT: ${RATELIMIT_DEFAULT:-100 per minute}
+
+      # Security
+      FORCE_HTTPS: ${FORCE_HTTPS:-false}
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
+
+      # Monitoring
+      HEALTH_CHECK_ENABLED: ${HEALTH_CHECK_ENABLED:-true}
+      METRICS_ENABLED: ${METRICS_ENABLED:-true}
+
+      # Celery
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-changeme}@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-changeme}@redis:6379/0
+
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+
+    volumes:
+      - app_logs:/app/logs
+      - app_uploads:/app/uploads
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - plsql-network
+    restart: unless-stopped
+
+  # Celery Worker
+  celery:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: plsql-celery
+    command: celery -A backend.celery_app worker --loglevel=info
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      # Same environment as app
+      FLASK_ENV: ${FLASK_ENV:-production}
+      SECRET_KEY: ${SECRET_KEY:-changeme-generate-secure-key}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-plsql_user}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/${POSTGRES_DB:-plsql_workbench}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-changeme}@redis:6379/0
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-changeme}@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-changeme}@redis:6379/0
+    volumes:
+      - app_logs:/app/logs
+    networks:
+      - plsql-network
+    restart: unless-stopped
+
+  # Nginx Reverse Proxy (optional - for production)
+  nginx:
+    image: nginx:alpine
+    container_name: plsql-nginx
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./frontend/dist:/usr/share/nginx/html:ro
+      - nginx_logs:/var/log/nginx
+      - letsencrypt:/etc/letsencrypt:ro
+      - letsencrypt_www:/var/www/letsencrypt:ro
+    networks:
+      - plsql-network
+    restart: unless-stopped
+    profiles:
+      - production
+
+networks:
+  plsql-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  app_logs:
+    driver: local
+  app_uploads:
+    driver: local
+  nginx_logs:
+    driver: local
+  letsencrypt:
+    driver: local
+  letsencrypt_www:
+    driver: local
