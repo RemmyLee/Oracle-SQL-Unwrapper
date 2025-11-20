@@ -54,11 +54,17 @@ def register_blueprints(app):
     from backend.api.unwrap import unwrap_bp
     from backend.api.connections import connections_bp
     from backend.api.queries import queries_bp
+    from backend.api.export import export_bp
+    from backend.api.saved_queries import saved_queries_bp
+    from backend.api.templates import templates_bp
 
     # Register API blueprints
     app.register_blueprint(unwrap_bp, url_prefix='/api')
     app.register_blueprint(connections_bp, url_prefix='/api')
     app.register_blueprint(queries_bp, url_prefix='/api')
+    app.register_blueprint(export_bp, url_prefix='/api')
+    app.register_blueprint(saved_queries_bp, url_prefix='/api')
+    app.register_blueprint(templates_bp, url_prefix='/api')
 
     # Root route for frontend
     @app.route('/')

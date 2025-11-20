@@ -1,0 +1,244 @@
+{
+  "categories": [
+    {
+      "name": "DDL - Tables",
+      "description": "Data Definition Language for table operations",
+      "templates": [
+        {
+          "name": "Create Table",
+          "description": "Create a new table with primary key",
+          "sql": "CREATE TABLE table_name (\n    id NUMBER PRIMARY KEY,\n    name VARCHAR2(100) NOT NULL,\n    created_date DATE DEFAULT SYSDATE,\n    status VARCHAR2(20),\n    CONSTRAINT chk_status CHECK (status IN ('ACTIVE', 'INACTIVE'))\n);",
+          "tags": ["ddl", "table", "create"]
+        },
+        {
+          "name": "Add Column",
+          "description": "Add a new column to existing table",
+          "sql": "ALTER TABLE table_name\nADD (column_name VARCHAR2(50) DEFAULT 'default_value' NOT NULL);",
+          "tags": ["ddl", "alter", "column"]
+        },
+        {
+          "name": "Drop Column",
+          "description": "Drop a column from table",
+          "sql": "ALTER TABLE table_name\nDROP COLUMN column_name;",
+          "tags": ["ddl", "alter", "drop"]
+        },
+        {
+          "name": "Create Index",
+          "description": "Create an index on table column(s)",
+          "sql": "CREATE INDEX idx_table_column\nON table_name (column_name);",
+          "tags": ["ddl", "index", "performance"]
+        }
+      ]
+    },
+    {
+      "name": "DML - Queries",
+      "description": "Data Manipulation Language for data operations",
+      "templates": [
+        {
+          "name": "Basic SELECT",
+          "description": "Select all columns from table",
+          "sql": "SELECT *\nFROM table_name\nWHERE condition = 'value'\nORDER BY column_name;",
+          "tags": ["dml", "select", "query"]
+        },
+        {
+          "name": "INSERT Single Row",
+          "description": "Insert a single row into table",
+          "sql": "INSERT INTO table_name (column1, column2, column3)\nVALUES ('value1', 'value2', 'value3');",
+          "tags": ["dml", "insert"]
+        },
+        {
+          "name": "UPDATE with WHERE",
+          "description": "Update specific rows",
+          "sql": "UPDATE table_name\nSET column1 = 'new_value',\n    column2 = 'new_value2'\nWHERE condition = 'value';",
+          "tags": ["dml", "update"]
+        },
+        {
+          "name": "DELETE with WHERE",
+          "description": "Delete specific rows",
+          "sql": "DELETE FROM table_name\nWHERE condition = 'value';",
+          "tags": ["dml", "delete"]
+        },
+        {
+          "name": "JOIN Tables",
+          "description": "Join two tables",
+          "sql": "SELECT t1.*, t2.column_name\nFROM table1 t1\nINNER JOIN table2 t2\n    ON t1.id = t2.table1_id\nWHERE t1.status = 'ACTIVE';",
+          "tags": ["dml", "select", "join"]
+        }
+      ]
+    },
+    {
+      "name": "PL/SQL - Procedures",
+      "description": "PL/SQL stored procedures and functions",
+      "templates": [
+        {
+          "name": "Simple Procedure",
+          "description": "Create a simple stored procedure",
+          "sql": "CREATE OR REPLACE PROCEDURE procedure_name (\n    p_param1 IN VARCHAR2,\n    p_param2 OUT NUMBER\n)\nAS\nBEGIN\n    -- Procedure logic here\n    SELECT COUNT(*)\n    INTO p_param2\n    FROM table_name\n    WHERE column = p_param1;\nEXCEPTION\n    WHEN NO_DATA_FOUND THEN\n        p_param2 := 0;\n    WHEN OTHERS THEN\n        RAISE;\nEND;",
+          "tags": ["plsql", "procedure", "create"]
+        },
+        {
+          "name": "Simple Function",
+          "description": "Create a simple function",
+          "sql": "CREATE OR REPLACE FUNCTION function_name (\n    p_param1 IN VARCHAR2\n)\nRETURN NUMBER\nAS\n    v_result NUMBER;\nBEGIN\n    SELECT COUNT(*)\n    INTO v_result\n    FROM table_name\n    WHERE column = p_param1;\n    \n    RETURN v_result;\nEXCEPTION\n    WHEN NO_DATA_FOUND THEN\n        RETURN 0;\n    WHEN OTHERS THEN\n        RAISE;\nEND;",
+          "tags": ["plsql", "function", "create"]
+        },
+        {
+          "name": "Anonymous Block",
+          "description": "PL/SQL anonymous block",
+          "sql": "DECLARE\n    v_variable VARCHAR2(100);\n    v_count NUMBER;\nBEGIN\n    -- Your code here\n    SELECT column_name\n    INTO v_variable\n    FROM table_name\n    WHERE id = 1;\n    \n    DBMS_OUTPUT.PUT_LINE('Result: ' || v_variable);\nEXCEPTION\n    WHEN NO_DATA_FOUND THEN\n        DBMS_OUTPUT.PUT_LINE('No data found');\n    WHEN TOO_MANY_ROWS THEN\n        DBMS_OUTPUT.PUT_LINE('Too many rows');\nEND;\n/",
+          "tags": ["plsql", "block", "script"]
+        }
+      ]
+    },
+    {
+      "name": "PL/SQL - Packages",
+      "description": "PL/SQL package specifications and bodies",
+      "templates": [
+        {
+          "name": "Package Specification",
+          "description": "Create package specification",
+          "sql": "CREATE OR REPLACE PACKAGE package_name\nAS\n    -- Public constants\n    c_status_active CONSTANT VARCHAR2(10) := 'ACTIVE';\n    \n    -- Public procedures\n    PROCEDURE proc_name (\n        p_param1 IN VARCHAR2,\n        p_param2 OUT NUMBER\n    );\n    \n    -- Public functions\n    FUNCTION func_name (\n        p_param1 IN VARCHAR2\n    ) RETURN NUMBER;\nEND package_name;\n/",
+          "tags": ["plsql", "package", "specification"]
+        },
+        {
+          "name": "Package Body",
+          "description": "Create package body",
+          "sql": "CREATE OR REPLACE PACKAGE BODY package_name\nAS\n    -- Private variables\n    g_initialized BOOLEAN := FALSE;\n    \n    -- Private procedures\n    PROCEDURE initialize\n    AS\n    BEGIN\n        g_initialized := TRUE;\n    END initialize;\n    \n    -- Public procedures\n    PROCEDURE proc_name (\n        p_param1 IN VARCHAR2,\n        p_param2 OUT NUMBER\n    )\n    AS\n    BEGIN\n        IF NOT g_initialized THEN\n            initialize;\n        END IF;\n        \n        -- Implementation here\n        p_param2 := 0;\n    END proc_name;\n    \n    -- Public functions\n    FUNCTION func_name (\n        p_param1 IN VARCHAR2\n    )\n    RETURN NUMBER\n    AS\n        v_result NUMBER;\n    BEGIN\n        -- Implementation here\n        RETURN v_result;\n    END func_name;\nEND package_name;\n/",
+          "tags": ["plsql", "package", "body"]
+        }
+      ]
+    },
+    {
+      "name": "Admin - Schemas",
+      "description": "Database administration queries",
+      "templates": [
+        {
+          "name": "List All Tables",
+          "description": "List all tables in current schema",
+          "sql": "SELECT table_name, num_rows, tablespace_name, last_analyzed\nFROM user_tables\nORDER BY table_name;",
+          "tags": ["admin", "query", "metadata"]
+        },
+        {
+          "name": "List Table Columns",
+          "description": "List columns for a specific table",
+          "sql": "SELECT column_name, data_type, data_length, nullable, data_default\nFROM user_tab_columns\nWHERE table_name = 'TABLE_NAME'\nORDER BY column_id;",
+          "tags": ["admin", "query", "metadata"]
+        },
+        {
+          "name": "List Indexes",
+          "description": "List indexes for a table",
+          "sql": "SELECT index_name, index_type, uniqueness, status\nFROM user_indexes\nWHERE table_name = 'TABLE_NAME'\nORDER BY index_name;",
+          "tags": ["admin", "query", "index"]
+        },
+        {
+          "name": "List Constraints",
+          "description": "List constraints for a table",
+          "sql": "SELECT constraint_name, constraint_type, search_condition, status\nFROM user_constraints\nWHERE table_name = 'TABLE_NAME'\nORDER BY constraint_type, constraint_name;",
+          "tags": ["admin", "query", "constraint"]
+        },
+        {
+          "name": "Table Size",
+          "description": "Get table size and statistics",
+          "sql": "SELECT\n    segment_name AS table_name,\n    ROUND(bytes/1024/1024, 2) AS size_mb,\n    blocks,\n    extents\nFROM user_segments\nWHERE segment_type = 'TABLE'\n  AND segment_name = 'TABLE_NAME';",
+          "tags": ["admin", "query", "size"]
+        }
+      ]
+    },
+    {
+      "name": "Admin - Objects",
+      "description": "Database object queries",
+      "templates": [
+        {
+          "name": "List Procedures",
+          "description": "List all procedures in schema",
+          "sql": "SELECT object_name, status, created, last_ddl_time\nFROM user_objects\nWHERE object_type = 'PROCEDURE'\nORDER BY object_name;",
+          "tags": ["admin", "query", "procedure"]
+        },
+        {
+          "name": "List Functions",
+          "description": "List all functions in schema",
+          "sql": "SELECT object_name, status, created, last_ddl_time\nFROM user_objects\nWHERE object_type = 'FUNCTION'\nORDER BY object_name;",
+          "tags": ["admin", "query", "function"]
+        },
+        {
+          "name": "List Packages",
+          "description": "List all packages in schema",
+          "sql": "SELECT object_name, object_type, status, created, last_ddl_time\nFROM user_objects\nWHERE object_type IN ('PACKAGE', 'PACKAGE BODY')\nORDER BY object_name, object_type;",
+          "tags": ["admin", "query", "package"]
+        },
+        {
+          "name": "Invalid Objects",
+          "description": "List invalid objects that need recompilation",
+          "sql": "SELECT object_type, object_name, status\nFROM user_objects\nWHERE status = 'INVALID'\nORDER BY object_type, object_name;",
+          "tags": ["admin", "query", "invalid"]
+        },
+        {
+          "name": "Get Source Code",
+          "description": "Get source code for stored object",
+          "sql": "SELECT text\nFROM user_source\nWHERE name = 'OBJECT_NAME'\n  AND type = 'PACKAGE'\nORDER BY line;",
+          "tags": ["admin", "query", "source"]
+        }
+      ]
+    },
+    {
+      "name": "Performance",
+      "description": "Performance tuning queries",
+      "templates": [
+        {
+          "name": "Explain Plan",
+          "description": "Generate execution plan for query",
+          "sql": "EXPLAIN PLAN FOR\nSELECT *\nFROM table_name\nWHERE column = 'value';\n\nSELECT * FROM TABLE(DBMS_XPLAN.DISPLAY);",
+          "tags": ["performance", "explain", "tuning"]
+        },
+        {
+          "name": "Table Statistics",
+          "description": "Gather table statistics",
+          "sql": "BEGIN\n    DBMS_STATS.GATHER_TABLE_STATS(\n        ownname => USER,\n        tabname => 'TABLE_NAME',\n        estimate_percent => DBMS_STATS.AUTO_SAMPLE_SIZE,\n        cascade => TRUE\n    );\nEND;\n/",
+          "tags": ["performance", "stats", "admin"]
+        },
+        {
+          "name": "Active Sessions",
+          "description": "Show active database sessions",
+          "sql": "SELECT\n    s.sid,\n    s.serial#,\n    s.username,\n    s.status,\n    s.program,\n    s.sql_id,\n    s.last_call_et\nFROM v$session s\nWHERE s.status = 'ACTIVE'\n  AND s.username IS NOT NULL\nORDER BY s.last_call_et DESC;",
+          "tags": ["performance", "session", "monitor"]
+        }
+      ]
+    },
+    {
+      "name": "Snippets",
+      "description": "Common SQL snippets and patterns",
+      "templates": [
+        {
+          "name": "Date Formatting",
+          "description": "Format dates in various ways",
+          "sql": "SELECT\n    SYSDATE AS current_date,\n    TO_CHAR(SYSDATE, 'YYYY-MM-DD') AS iso_date,\n    TO_CHAR(SYSDATE, 'DD-MON-YYYY HH24:MI:SS') AS full_datetime,\n    TO_CHAR(SYSDATE, 'Day, Month DD, YYYY') AS long_format\nFROM dual;",
+          "tags": ["snippet", "date", "format"]
+        },
+        {
+          "name": "String Operations",
+          "description": "Common string manipulation",
+          "sql": "SELECT\n    UPPER('text') AS uppercase,\n    LOWER('TEXT') AS lowercase,\n    INITCAP('hello world') AS title_case,\n    SUBSTR('abcdefg', 1, 3) AS substring,\n    REPLACE('hello world', 'world', 'oracle') AS replaced,\n    TRIM('  text  ') AS trimmed,\n    LENGTH('text') AS length\nFROM dual;",
+          "tags": ["snippet", "string", "functions"]
+        },
+        {
+          "name": "NULL Handling",
+          "description": "Work with NULL values",
+          "sql": "SELECT\n    NVL(column_name, 'default') AS with_default,\n    NVL2(column_name, 'not null', 'is null') AS null_check,\n    COALESCE(col1, col2, col3, 'default') AS first_non_null,\n    NULLIF(col1, col2) AS null_if_equal\nFROM table_name;",
+          "tags": ["snippet", "null", "functions"]
+        },
+        {
+          "name": "Row Limiting",
+          "description": "Limit number of rows returned",
+          "sql": "-- Oracle 12c+ FETCH FIRST syntax\nSELECT *\nFROM table_name\nORDER BY column_name\nFETCH FIRST 10 ROWS ONLY;\n\n-- Alternative with ROWNUM\nSELECT *\nFROM (\n    SELECT *\n    FROM table_name\n    ORDER BY column_name\n)\nWHERE ROWNUM <= 10;",
+          "tags": ["snippet", "limit", "pagination"]
+        },
+        {
+          "name": "Pivot Data",
+          "description": "Pivot rows to columns",
+          "sql": "SELECT *\nFROM (\n    SELECT category, month, amount\n    FROM sales_data\n)\nPIVOT (\n    SUM(amount)\n    FOR month IN ('JAN', 'FEB', 'MAR', 'APR')\n);",
+          "tags": ["snippet", "pivot", "transform"]
+        }
+      ]
+    }
+  ]
+}

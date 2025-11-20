@@ -3,5 +3,8 @@
 from .unwrap import unwrap_bp
 from .connections import connections_bp
 from .queries import queries_bp
+from .export import export_bp
+from .saved_queries import saved_queries_bp
+from .templates import templates_bp
 
-__all__ = ['unwrap_bp', 'connections_bp', 'queries_bp']
+__all__ = ['unwrap_bp', 'connections_bp', 'queries_bp', 'export_bp', 'saved_queries_bp', 'templates_bp']

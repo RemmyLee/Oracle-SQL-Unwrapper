@@ -1,100 +1,1145 @@
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
-    <style type="text/css">
-        body, td, th, h1, h2, h3, select, input, file, textarea  { font-size: 11pt; font-family: 'Courier New', monospace; background-color: #202325; color: #FFF; }
-        address, body, blockquote, dd, div, dl, dt, fieldset, form, frame, frameset, h1, h2, h3, h4, h5, h6, iframe, noframes,
-        object, ol, p, ul, applet, center, dir, hr, menu, pre { display: block; }
-        form { margin: 0 0; padding: 0 0; }
-        li { display: list-item }
-        head { display: none }
-        table { display: table; padding: 0 0; margin: 0 0; border: none;  }
-        tr { display: table-row }
-        thead { display: table-header-group }
-        tbody { display: table-row-group }
-        tfoot { display: table-footer-group }
-        col{ display: table-column }
-        colgroup { display: table-column-group }
-        td, th { display: table-cell }
-        caption { display: table-caption; text-align: center }
-        th { font-weight: bolder; text-align: center }
-        body { margin: 0; padding: 0 0; line-height: 1.33 }
-        h1 { color: #FFFFFF; font-size: 2em; margin: 0 0 .67em 0; padding: 0.2em 0 0.2em 25px; font-weight: bold; letter-spacing: 0.05em; background-color: #205AA7; }
-        h2 { font-size: 1.2em; font-weight: bolder; margin: .5em 0; color: #205AA7 }
-        h3 { font-size: 1.17em; font-weight: bolder; margin: 1em 0 }
-        h4 { font-weight: bolder; margin: 0 0; padding: 0 0 }
-        h5 { font-size: .83em; font-weight: bolder; line-height: 1.17em; margin: 1.67em 0 }
-        h6 { font-size: .67em; font-weight: bolder; margin: 2.33em 0 }
-        p, blockquote, ul, fieldset, ol, dl, dir, menu { margin: 0 0; padding: 0 0 }
-        b, strong { font-weight: bolder }
-        blockquote { margin-left: 3.5em; margin-right: 3.5em }
-        i, cite, em, var, address { font-style: italic }
-        pre, tt, code, kbd, samp { font-family: monospace }
-        pre { font-size: 0.83em; white-space: pre; margin: 0; padding: 0 }
-        big { font-size: 1.17em }
-        small, sub, sup { font-size: .83em }
-        sub { vertical-align: sub }
-        sup { vertical-align: super }
-        s, strike, del { text-decoration: line-through }
-        hr { border-top: 1px solid; border-bottom: 0; color: black; background-color: black; }
-        ol, ul, dir, menu, dd { margin-left: 3.5em }
-        ol { list-style-type: decimal }
-        ol ul, ul ol, ul ul, ol ol { margin-top: 0; margin-bottom: 0 }
-        u, ins { text-decoration: underline }
-        center { text-align: center }
-        a[href] { text-decoration: underline }
-        .content { margin: 10px 25px 10px 25px;}
-        .copyright { font-size: 0.7em; color:#999999; margin-top: 10px }
-        .mt { margin-top: 10px }
-        .area { background-color: #EFF0E6; padding: 0.6em 1em; border: #BFC0B6 solid 1px; }
-        .errorArea { background-color: #F5F6CE; padding: 0.6em 1em; border: #E6DF73 solid 1px; }
-        .ln { color: #666666 }
-        .horSpace { margin-left: 2em; }
-        .codebox { background-color: #222932; padding: 0.6em 1em; border: #334359 solid 1px; font-family: 'Courier New', monospace; display: inline-block;}
-        .howto { background-color: #222932; padding: 0.6em 1em; border: #334359 solid 1px; font-family: 'Courier New', monospace; width: 905px; }
-        .txtar { background-color: #222932; padding: 0.6em 1em; border: #334359 solid 1px; font-family: 'Courier New', monospace; }
-        a:link { color: #FFFFFF; text-decoration: none; }
-        a:visited { color: #FFFFFF; text-decoration: none; }
-        
-</style>
-<title>SQL Unwrapper</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PL/SQL Workbench - Oracle Database Tool</title>
+    <style>
+        :root {
+            --bg-primary: #1e1e1e;
+            --bg-secondary: #252526;
+            --bg-tertiary: #2d2d30;
+            --bg-hover: #2a2d2e;
+            --border-color: #3e3e42;
+            --text-primary: #d4d4d4;
+            --text-secondary: #969696;
+            --accent-blue: #007acc;
+            --accent-blue-hover: #005a9e;
+            --accent-green: #4ec9b0;
+            --accent-red: #f48771;
+            --accent-yellow: #dcdcaa;
+            --font-mono: 'Consolas', 'Monaco', 'Courier New', monospace;
+            --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: var(--font-sans);
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+
+        /* Header */
+        .header {
+            background-color: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--accent-blue);
+        }
+
+        .header-info {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        /* Tabs */
+        .tabs {
+            background-color: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            padding: 0 2rem;
+            gap: 0.5rem;
+        }
+
+        .tab {
+            padding: 0.75rem 1.5rem;
+            cursor: pointer;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .tab:hover {
+            color: var(--text-primary);
+            background-color: var(--bg-hover);
+        }
+
+        .tab.active {
+            color: var(--accent-blue);
+            border-bottom-color: var(--accent-blue);
+        }
+
+        /* Content */
+        .content {
+            padding: 2rem;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Forms */
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 0.5rem;
+            background-color: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            font-family: var(--font-mono);
+            font-size: 0.9rem;
+            border-radius: 4px;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+        }
+
+        textarea.form-control {
+            resize: vertical;
+            min-height: 300px;
+            font-family: var(--font-mono);
+        }
+
+        select.form-control {
+            cursor: pointer;
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 0.5rem 1.5rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+            font-weight: 500;
+        }
+
+        .btn-primary {
+            background-color: var(--accent-blue);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: var(--accent-blue-hover);
+        }
+
+        .btn-secondary {
+            background-color: var(--bg-tertiary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-secondary:hover {
+            background-color: var(--bg-hover);
+        }
+
+        .btn-success {
+            background-color: var(--accent-green);
+            color: var(--bg-primary);
+        }
+
+        .btn-danger {
+            background-color: var(--accent-red);
+            color: white;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        /* Code Display */
+        .code-box {
+            background-color: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 1rem;
+            font-family: var(--font-mono);
+            font-size: 0.9rem;
+            overflow-x: auto;
+            white-space: pre;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .code-box.wrapped {
+            background-color: #2d2520;
+            border-color: #5a4a3a;
+        }
+
+        /* Grid Layout */
+        .grid {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .grid-2 {
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .grid-3 {
+            grid-template-columns: 1fr 1fr 1fr;
+        }
+
+        /* Cards */
+        .card {
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 1.5rem;
+        }
+
+        .card-header {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        /* Table */
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .table th,
+        .table td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .table th {
+            background-color: var(--bg-tertiary);
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .table tr:hover {
+            background-color: var(--bg-hover);
+        }
+
+        .table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        /* Alert */
+        .alert {
+            padding: 1rem;
+            border-radius: 4px;
+            margin-bottom: 1rem;
+        }
+
+        .alert-success {
+            background-color: rgba(78, 201, 176, 0.1);
+            border: 1px solid var(--accent-green);
+            color: var(--accent-green);
+        }
+
+        .alert-error {
+            background-color: rgba(244, 135, 113, 0.1);
+            border: 1px solid var(--accent-red);
+            color: var(--accent-red);
+        }
+
+        .alert-info {
+            background-color: rgba(0, 122, 204, 0.1);
+            border: 1px solid var(--accent-blue);
+            color: var(--accent-blue);
+        }
+
+        /* Loading Spinner */
+        .spinner {
+            border: 3px solid var(--border-color);
+            border-top: 3px solid var(--accent-blue);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 2rem auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Hidden */
+        .hidden {
+            display: none !important;
+        }
+
+        /* Toolbar */
+        .toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding: 0.5rem;
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+        }
+
+        /* List */
+        .list {
+            list-style: none;
+        }
+
+        .list-item {
+            padding: 1rem;
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            margin-bottom: 0.5rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .list-item:hover {
+            background-color: var(--bg-hover);
+            border-color: var(--accent-blue);
+        }
+
+        .list-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .list-item-title {
+            font-weight: 600;
+            color: var(--accent-blue);
+        }
+
+        .list-item-meta {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        /* Tag */
+        .tag {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            background-color: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 3px;
+            font-size: 0.75rem;
+            margin-right: 0.25rem;
+        }
+
+        /* Status Badge */
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 3px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .badge-success {
+            background-color: var(--accent-green);
+            color: var(--bg-primary);
+        }
+
+        .badge-error {
+            background-color: var(--accent-red);
+            color: white;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .grid-2,
+            .grid-3 {
+                grid-template-columns: 1fr;
+            }
+
+            .tabs {
+                overflow-x: auto;
+            }
+
+            .content {
+                padding: 1rem;
+            }
+
+            .header {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+        }
+    </style>
 </head>
 <body>
-    <div class="content">
-            {% if unwrapped_sql %}
-            Unwrapped SQL:<br><br>
-            <div class="codebox">
-                {{ unwrapped_sql|safe }}
-            </div>
-            <br><br>
-            <a href="http://127.0.0.1:3117/sql">Unwrap another SQL Query</a>
-            {% else %}
-            Wrapped SQL:<br><br>
-            <table border="0" cellpadding="0" cellspacing="0">
-                <tr>
-                    <td>
-                        <form action="http://127.0.0.1:3117/unwrap" method="post">
-                            <textarea id="wrapped" name="wrapped" rows="30" cols="100" class="txtar"></textarea>
-                            <br><br>
-                            <input type="submit" value="Submit">
-                        </form>
-                    </td>
-                </tr>
-                <tr>
-                    <td>
-                        <br><br>
-                        <div class="howto">
-                            <b>How to use:</b><br>
-                            <ol>
-                                <li>Copy the wrapped SQL query from the application</li>
-                                <li>Paste it into the text box above</li>
-                                <li>Click "Submit"</li>
-                            </ol>
-                        </div>
-                    </td>
-            
-            {% endif %}
-                
-            
+    <!-- Header -->
+    <div class="header">
+        <h1>🗄️ PL/SQL Workbench</h1>
+        <div class="header-info">
+            <span id="connection-status">Not Connected</span>
+        </div>
     </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+        <button class="tab active" data-tab="unwrap">Unwrap SQL</button>
+        <button class="tab" data-tab="query">Query Editor</button>
+        <button class="tab" data-tab="connections">Connections</button>
+        <button class="tab" data-tab="saved">Saved Queries</button>
+        <button class="tab" data-tab="schema">Schema Browser</button>
+    </div>
+
+    <!-- Content -->
+    <div class="content">
+        <!-- Unwrap Tab -->
+        <div id="unwrap-content" class="tab-content active">
+            <div class="card">
+                <div class="card-header">Unwrap Oracle PL/SQL</div>
+
+                <div class="form-group">
+                    <label>Source:</label>
+                    <div class="btn-group">
+                        <button class="btn btn-secondary" onclick="setUnwrapSource('text')">Paste Text</button>
+                        <button class="btn btn-secondary" onclick="setUnwrapSource('db')">From Database</button>
+                    </div>
+                </div>
+
+                <!-- Paste Text Mode -->
+                <div id="unwrap-text-mode">
+                    <div class="form-group">
+                        <label for="wrapped-sql">Wrapped SQL Code:</label>
+                        <textarea id="wrapped-sql" class="form-control" placeholder="Paste wrapped SQL code here..."></textarea>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn btn-primary" onclick="unwrapText()">Unwrap</button>
+                        <button class="btn btn-secondary" onclick="clearUnwrap()">Clear</button>
+                    </div>
+                </div>
+
+                <!-- From Database Mode -->
+                <div id="unwrap-db-mode" class="hidden">
+                    <div class="grid grid-2">
+                        <div class="form-group">
+                            <label for="unwrap-connection">Connection:</label>
+                            <select id="unwrap-connection" class="form-control">
+                                <option value="">Select connection...</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="unwrap-object-type">Object Type:</label>
+                            <select id="unwrap-object-type" class="form-control">
+                                <option value="PACKAGE">Package</option>
+                                <option value="PACKAGE BODY">Package Body</option>
+                                <option value="PROCEDURE">Procedure</option>
+                                <option value="FUNCTION">Function</option>
+                                <option value="TRIGGER">Trigger</option>
+                                <option value="TYPE">Type</option>
+                                <option value="TYPE BODY">Type Body</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="unwrap-schema">Schema:</label>
+                            <input type="text" id="unwrap-schema" class="form-control" placeholder="Leave empty for current user">
+                        </div>
+                        <div class="form-group">
+                            <label for="unwrap-object-name">Object Name:</label>
+                            <input type="text" id="unwrap-object-name" class="form-control" placeholder="e.g., MY_PACKAGE">
+                        </div>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn btn-primary" onclick="unwrapFromDB()">Unwrap from Database</button>
+                        <button class="btn btn-secondary" onclick="setUnwrapSource('text')">Back to Text Mode</button>
+                    </div>
+                </div>
+
+                <!-- Results -->
+                <div id="unwrap-result" class="hidden">
+                    <div class="toolbar">
+                        <h3>Unwrapped SQL:</h3>
+                        <div class="btn-group">
+                            <button class="btn btn-secondary" onclick="copyUnwrapped()">Copy</button>
+                            <button class="btn btn-secondary" onclick="formatUnwrapped()">Format</button>
+                            <button class="btn btn-secondary" onclick="downloadUnwrapped()">Download</button>
+                        </div>
+                    </div>
+                    <div id="unwrapped-code" class="code-box"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Query Editor Tab -->
+        <div id="query-content" class="tab-content">
+            <div class="card">
+                <div class="card-header">Execute SQL Query</div>
+
+                <div class="form-group">
+                    <label for="query-connection">Connection:</label>
+                    <select id="query-connection" class="form-control">
+                        <option value="">Select connection...</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="query-sql">SQL Query:</label>
+                    <textarea id="query-sql" class="form-control" placeholder="Enter SQL query..."></textarea>
+                </div>
+
+                <div class="btn-group">
+                    <button class="btn btn-primary" onclick="executeQuery()">Execute</button>
+                    <button class="btn btn-secondary" onclick="formatQuery()">Format</button>
+                    <button class="btn btn-secondary" onclick="saveQuery()">Save</button>
+                    <button class="btn btn-secondary" onclick="clearQuery()">Clear</button>
+                </div>
+
+                <!-- Query Results -->
+                <div id="query-results" class="hidden">
+                    <div class="toolbar">
+                        <div>
+                            <span id="query-row-count"></span>
+                            <span id="query-execution-time"></span>
+                        </div>
+                        <div class="btn-group">
+                            <button class="btn btn-secondary" onclick="exportResults('csv')">Export CSV</button>
+                            <button class="btn btn-secondary" onclick="exportResults('xlsx')">Export Excel</button>
+                            <button class="btn btn-secondary" onclick="exportResults('json')">Export JSON</button>
+                        </div>
+                    </div>
+                    <div id="query-results-table"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Connections Tab -->
+        <div id="connections-content" class="tab-content">
+            <div class="toolbar">
+                <h2>Oracle Connections</h2>
+                <button class="btn btn-primary" onclick="showNewConnectionForm()">+ New Connection</button>
+            </div>
+
+            <!-- New Connection Form -->
+            <div id="new-connection-form" class="card hidden">
+                <div class="card-header">New Connection</div>
+
+                <div class="grid grid-2">
+                    <div class="form-group">
+                        <label for="conn-name">Connection Name:</label>
+                        <input type="text" id="conn-name" class="form-control" placeholder="e.g., Production DB">
+                    </div>
+                    <div class="form-group">
+                        <label for="conn-type">Connection Type:</label>
+                        <select id="conn-type" class="form-control">
+                            <option value="service_name">Service Name</option>
+                            <option value="sid">SID</option>
+                            <option value="tns">TNS</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="conn-host">Host:</label>
+                        <input type="text" id="conn-host" class="form-control" placeholder="localhost">
+                    </div>
+                    <div class="form-group">
+                        <label for="conn-port">Port:</label>
+                        <input type="number" id="conn-port" class="form-control" value="1521">
+                    </div>
+                    <div class="form-group">
+                        <label for="conn-service">Service Name / SID:</label>
+                        <input type="text" id="conn-service" class="form-control" placeholder="ORCL">
+                    </div>
+                    <div class="form-group">
+                        <label for="conn-username">Username:</label>
+                        <input type="text" id="conn-username" class="form-control" placeholder="system">
+                    </div>
+                    <div class="form-group">
+                        <label for="conn-password">Password:</label>
+                        <input type="password" id="conn-password" class="form-control">
+                    </div>
+                </div>
+
+                <div class="btn-group">
+                    <button class="btn btn-primary" onclick="testConnection()">Test Connection</button>
+                    <button class="btn btn-success" onclick="saveConnection()">Save</button>
+                    <button class="btn btn-secondary" onclick="cancelNewConnection()">Cancel</button>
+                </div>
+
+                <div id="connection-test-result"></div>
+            </div>
+
+            <!-- Connections List -->
+            <div id="connections-list"></div>
+        </div>
+
+        <!-- Saved Queries Tab -->
+        <div id="saved-content" class="tab-content">
+            <div class="toolbar">
+                <h2>Saved Queries</h2>
+                <div class="form-group" style="margin: 0; flex: 1; max-width: 300px;">
+                    <input type="text" id="saved-search" class="form-control" placeholder="Search queries...">
+                </div>
+            </div>
+
+            <div id="saved-queries-list"></div>
+        </div>
+
+        <!-- Schema Browser Tab -->
+        <div id="schema-content" class="tab-content">
+            <div class="card">
+                <div class="card-header">Database Schema Browser</div>
+
+                <div class="form-group">
+                    <label for="schema-connection">Connection:</label>
+                    <select id="schema-connection" class="form-control" onchange="loadSchemas()">
+                        <option value="">Select connection...</option>
+                    </select>
+                </div>
+
+                <div id="schema-browser"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loading" class="hidden">
+        <div class="spinner"></div>
+    </div>
+
+    <script>
+        // API Base URL
+        const API_BASE = '/api';
+
+        // Current state
+        let currentConnection = null;
+        let currentQueryResults = null;
+        let connections = [];
+
+        // Tab Switching
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                const tabName = tab.dataset.tab;
+                switchTab(tabName);
+            });
+        });
+
+        function switchTab(tabName) {
+            // Update tab buttons
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+
+            // Update content
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.getElementById(`${tabName}-content`).classList.add('active');
+
+            // Load data if needed
+            if (tabName === 'connections') {
+                loadConnections();
+            } else if (tabName === 'saved') {
+                loadSavedQueries();
+            }
+        }
+
+        // Unwrap Functions
+        function setUnwrapSource(source) {
+            if (source === 'text') {
+                document.getElementById('unwrap-text-mode').classList.remove('hidden');
+                document.getElementById('unwrap-db-mode').classList.add('hidden');
+            } else {
+                document.getElementById('unwrap-text-mode').classList.add('hidden');
+                document.getElementById('unwrap-db-mode').classList.remove('hidden');
+                loadConnectionsForDropdown('unwrap-connection');
+            }
+        }
+
+        async function unwrapText() {
+            const wrappedSql = document.getElementById('wrapped-sql').value.trim();
+            if (!wrappedSql) {
+                showAlert('error', 'Please enter wrapped SQL code');
+                return;
+            }
+
+            try {
+                showLoading(true);
+                const response = await fetch(`${API_BASE}/unwrap`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content: wrappedSql })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    document.getElementById('unwrapped-code').textContent = result.unwrapped_sql;
+                    document.getElementById('unwrap-result').classList.remove('hidden');
+                    showAlert('success', 'SQL unwrapped successfully!');
+                } else {
+                    showAlert('error', result.error || 'Failed to unwrap SQL');
+                }
+            } catch (error) {
+                showAlert('error', 'Network error: ' + error.message);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function unwrapFromDB() {
+            const connectionId = document.getElementById('unwrap-connection').value;
+            const objectType = document.getElementById('unwrap-object-type').value;
+            const schema = document.getElementById('unwrap-schema').value;
+            const objectName = document.getElementById('unwrap-object-name').value.trim();
+
+            if (!connectionId || !objectName) {
+                showAlert('error', 'Please select connection and enter object name');
+                return;
+            }
+
+            try {
+                showLoading(true);
+                const response = await fetch(`${API_BASE}/unwrap-from-db`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        connection_id: parseInt(connectionId),
+                        object_type: objectType,
+                        schema: schema || null,
+                        object_name: objectName
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    document.getElementById('unwrapped-code').textContent = result.unwrapped_sql;
+                    document.getElementById('unwrap-result').classList.remove('hidden');
+                    showAlert('success', 'SQL unwrapped successfully from database!');
+                } else {
+                    showAlert('error', result.error || 'Failed to unwrap SQL from database');
+                }
+            } catch (error) {
+                showAlert('error', 'Network error: ' + error.message);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function clearUnwrap() {
+            document.getElementById('wrapped-sql').value = '';
+            document.getElementById('unwrap-result').classList.add('hidden');
+        }
+
+        function copyUnwrapped() {
+            const code = document.getElementById('unwrapped-code').textContent;
+            navigator.clipboard.writeText(code).then(() => {
+                showAlert('success', 'Copied to clipboard!');
+            });
+        }
+
+        async function formatUnwrapped() {
+            const code = document.getElementById('unwrapped-code').textContent;
+            // Format using SQL formatter (would call API endpoint)
+            showAlert('info', 'SQL formatting coming soon!');
+        }
+
+        function downloadUnwrapped() {
+            const code = document.getElementById('unwrapped-code').textContent;
+            const blob = new Blob([code], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'unwrapped.sql';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // Query Editor Functions
+        async function executeQuery() {
+            const connectionId = document.getElementById('query-connection').value;
+            const sql = document.getElementById('query-sql').value.trim();
+
+            if (!connectionId || !sql) {
+                showAlert('error', 'Please select connection and enter SQL query');
+                return;
+            }
+
+            try {
+                showLoading(true);
+                const response = await fetch(`${API_BASE}/execute`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        connection_id: parseInt(connectionId),
+                        sql: sql
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    currentQueryResults = result;
+                    displayQueryResults(result);
+                    showAlert('success', 'Query executed successfully!');
+                } else {
+                    showAlert('error', result.error || 'Query execution failed');
+                }
+            } catch (error) {
+                showAlert('error', 'Network error: ' + error.message);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function displayQueryResults(result) {
+            const rowCount = document.getElementById('query-row-count');
+            const execTime = document.getElementById('query-execution-time');
+            const tableDiv = document.getElementById('query-results-table');
+
+            rowCount.textContent = `${result.row_count} rows`;
+            execTime.textContent = ` • ${result.execution_time_ms}ms`;
+
+            // Build table
+            let html = '<table class="table"><thead><tr>';
+            result.columns.forEach(col => {
+                html += `<th>${col}</th>`;
+            });
+            html += '</tr></thead><tbody>';
+
+            result.rows.forEach(row => {
+                html += '<tr>';
+                row.forEach(cell => {
+                    html += `<td>${cell !== null ? cell : '<i>NULL</i>'}</td>`;
+                });
+                html += '</tr>';
+            });
+
+            html += '</tbody></table>';
+            tableDiv.innerHTML = html;
+            document.getElementById('query-results').classList.remove('hidden');
+        }
+
+        async function exportResults(format) {
+            if (!currentQueryResults) {
+                showAlert('error', 'No query results to export');
+                return;
+            }
+
+            try {
+                showLoading(true);
+                const response = await fetch(`${API_BASE}/export`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        data: {
+                            columns: currentQueryResults.columns,
+                            rows: currentQueryResults.rows
+                        },
+                        format: format,
+                        filename: 'query_results'
+                    })
+                });
+
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `query_results.${format}`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    showAlert('success', 'Export successful!');
+                } else {
+                    showAlert('error', 'Export failed');
+                }
+            } catch (error) {
+                showAlert('error', 'Export error: ' + error.message);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function formatQuery() {
+            showAlert('info', 'SQL formatting coming soon!');
+        }
+
+        function saveQuery() {
+            showAlert('info', 'Save query feature coming soon!');
+        }
+
+        function clearQuery() {
+            document.getElementById('query-sql').value = '';
+            document.getElementById('query-results').classList.add('hidden');
+        }
+
+        // Connection Functions
+        async function loadConnections() {
+            try {
+                const response = await fetch(`${API_BASE}/connections`);
+                const result = await response.json();
+
+                if (result.success) {
+                    connections = result.connections;
+                    displayConnections(result.connections);
+                }
+            } catch (error) {
+                showAlert('error', 'Failed to load connections');
+            }
+        }
+
+        async function loadConnectionsForDropdown(selectId) {
+            try {
+                const response = await fetch(`${API_BASE}/connections`);
+                const result = await response.json();
+
+                if (result.success) {
+                    const select = document.getElementById(selectId);
+                    select.innerHTML = '<option value="">Select connection...</option>';
+                    result.connections.forEach(conn => {
+                        if (conn.is_active) {
+                            select.innerHTML += `<option value="${conn.connection_id}">${conn.name}</option>`;
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error('Failed to load connections', error);
+            }
+        }
+
+        function displayConnections(conns) {
+            const list = document.getElementById('connections-list');
+
+            if (conns.length === 0) {
+                list.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 2rem;">No connections configured. Create one to get started!</p>';
+                return;
+            }
+
+            let html = '<div class="grid">';
+            conns.forEach(conn => {
+                const status = conn.is_active ? 'success' : 'error';
+                const statusText = conn.is_active ? 'Active' : 'Inactive';
+
+                html += `
+                    <div class="card">
+                        <div class="card-header">
+                            ${conn.name}
+                            <span class="badge badge-${status}">${statusText}</span>
+                        </div>
+                        <p><strong>Host:</strong> ${conn.host}:${conn.port}</p>
+                        <p><strong>Service:</strong> ${conn.service_name || conn.sid}</p>
+                        <p><strong>Username:</strong> ${conn.username}</p>
+                        <div class="btn-group">
+                            <button class="btn btn-secondary" onclick="testConnectionById(${conn.connection_id})">Test</button>
+                            <button class="btn btn-secondary" onclick="editConnection(${conn.connection_id})">Edit</button>
+                            <button class="btn btn-danger" onclick="deleteConnection(${conn.connection_id})">Delete</button>
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            list.innerHTML = html;
+        }
+
+        function showNewConnectionForm() {
+            document.getElementById('new-connection-form').classList.remove('hidden');
+        }
+
+        function cancelNewConnection() {
+            document.getElementById('new-connection-form').classList.add('hidden');
+        }
+
+        async function saveConnection() {
+            const data = {
+                name: document.getElementById('conn-name').value,
+                connection_type: document.getElementById('conn-type').value,
+                host: document.getElementById('conn-host').value,
+                port: parseInt(document.getElementById('conn-port').value),
+                username: document.getElementById('conn-username').value,
+                password: document.getElementById('conn-password').value
+            };
+
+            if (data.connection_type === 'service_name') {
+                data.service_name = document.getElementById('conn-service').value;
+            } else {
+                data.sid = document.getElementById('conn-service').value;
+            }
+
+            try {
+                showLoading(true);
+                const response = await fetch(`${API_BASE}/connections`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showAlert('success', 'Connection saved successfully!');
+                    cancelNewConnection();
+                    loadConnections();
+                } else {
+                    showAlert('error', result.error || 'Failed to save connection');
+                }
+            } catch (error) {
+                showAlert('error', 'Network error: ' + error.message);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function testConnectionById(id) {
+            try {
+                showLoading(true);
+                const response = await fetch(`${API_BASE}/connections/${id}/test`, {
+                    method: 'POST'
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showAlert('success', `Connection successful! ${result.message}`);
+                } else {
+                    showAlert('error', result.error || 'Connection failed');
+                }
+            } catch (error) {
+                showAlert('error', 'Network error: ' + error.message);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function deleteConnection(id) {
+            if (!confirm('Are you sure you want to delete this connection?')) {
+                return;
+            }
+
+            try {
+                showLoading(true);
+                const response = await fetch(`${API_BASE}/connections/${id}`, {
+                    method: 'DELETE'
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showAlert('success', 'Connection deleted');
+                    loadConnections();
+                } else {
+                    showAlert('error', result.error || 'Failed to delete connection');
+                }
+            } catch (error) {
+                showAlert('error', 'Network error: ' + error.message);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // Saved Queries Functions
+        async function loadSavedQueries() {
+            try {
+                const response = await fetch(`${API_BASE}/saved-queries`);
+                const result = await response.json();
+
+                if (result.success) {
+                    displaySavedQueries(result.queries);
+                }
+            } catch (error) {
+                showAlert('error', 'Failed to load saved queries');
+            }
+        }
+
+        function displaySavedQueries(queries) {
+            const list = document.getElementById('saved-queries-list');
+
+            if (queries.length === 0) {
+                list.innerHTML = '<p style="text-align: center; color: var(--text-secondary); padding: 2rem;">No saved queries yet. Save a query from the Query Editor!</p>';
+                return;
+            }
+
+            let html = '<ul class="list">';
+            queries.forEach(query => {
+                html += `
+                    <li class="list-item">
+                        <div class="list-item-header">
+                            <span class="list-item-title">${query.name}</span>
+                            <span class="list-item-meta">Executed ${query.execution_count} times</span>
+                        </div>
+                        ${query.description ? `<p>${query.description}</p>` : ''}
+                        ${query.tags && query.tags.length > 0 ? query.tags.map(tag => `<span class="tag">${tag}</span>`).join('') : ''}
+                        <div class="btn-group" style="margin-top: 0.5rem;">
+                            <button class="btn btn-primary" onclick="loadSavedQueryToEditor(${query.id})">Load</button>
+                            <button class="btn btn-secondary" onclick="deleteSavedQuery(${query.id})">Delete</button>
+                        </div>
+                    </li>
+                `;
+            });
+            html += '</ul>';
+            list.innerHTML = html;
+        }
+
+        // Utility Functions
+        function showLoading(show) {
+            document.getElementById('loading').classList.toggle('hidden', !show);
+        }
+
+        function showAlert(type, message) {
+            // Create alert element
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${type}`;
+            alert.textContent = message;
+
+            // Insert at top of content
+            const content = document.querySelector('.content');
+            content.insertBefore(alert, content.firstChild);
+
+            // Remove after 5 seconds
+            setTimeout(() => {
+                alert.remove();
+            }, 5000);
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            // Load connections for dropdowns
+            loadConnectionsForDropdown('query-connection');
+            loadConnectionsForDropdown('schema-connection');
+        });
+    </script>
 </body>
 </html>

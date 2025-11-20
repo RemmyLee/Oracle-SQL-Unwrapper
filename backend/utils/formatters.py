@@ -5,41 +5,8 @@ Formatting utilities for SQL and other outputs
 import re
 from typing import List, Dict
 
-
-def format_sql(sql: str, indent: int = 2) -> str:
-    """
-    Basic SQL formatting
-
-    Args:
-        sql: SQL code to format
-        indent: Number of spaces for indentation
-
-    Returns:
-        Formatted SQL
-    """
-    if not sql:
-        return ""
-
-    # Keywords that should start on a new line
-    keywords = [
-        'SELECT', 'FROM', 'WHERE', 'GROUP BY', 'ORDER BY',
-        'HAVING', 'JOIN', 'LEFT JOIN', 'RIGHT JOIN', 'INNER JOIN',
-        'UNION', 'INTERSECT', 'MINUS', 'INSERT', 'UPDATE', 'DELETE',
-        'CREATE', 'ALTER', 'DROP'
-    ]
-
-    formatted = sql
-
-    # Add newlines before major keywords
-    for keyword in keywords:
-        pattern = r'\b' + keyword + r'\b'
-        formatted = re.sub(pattern, '\n' + keyword, formatted, flags=re.IGNORECASE)
-
-    # Clean up extra whitespace
-    lines = [line.strip() for line in formatted.split('\n')]
-    formatted = '\n'.join(line for line in lines if line)
-
-    return formatted
+# Import SQL formatter from dedicated module
+from .sql_formatter import SQLFormatter, format_sql, minify_sql, validate_sql
 
 
 def format_bytes(bytes_size: int) -> str:
