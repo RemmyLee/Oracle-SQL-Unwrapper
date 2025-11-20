@@ -112,6 +112,8 @@ class Config:
     METRICS_PORT = int(os.environ.get('METRICS_PORT', 9090))
 
     # API Documentation
+    ENABLE_API_DOCS = os.environ.get('ENABLE_API_DOCS', 'false').lower() == 'true'
+    API_HOST = os.environ.get('API_HOST', 'localhost:8000')
     SWAGGER = {
         'title': 'PL/SQL Workbench API',
         'version': '1.0.0',
@@ -173,6 +175,9 @@ class DevelopmentConfig(Config):
 
     # Disable security headers in development
     TALISMAN_FORCE_HTTPS = False
+
+    # Enable API documentation in development
+    ENABLE_API_DOCS = True
 
     # More lenient limits for development
     DASHBOARD_MAX_COMPONENTS = 100
